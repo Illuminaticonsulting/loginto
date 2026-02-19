@@ -64,6 +64,15 @@
   <!-- Virtual Keyboard Trigger -->
   <input type="text" id="keyboard-input" class="keyboard-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
+  <!-- Displays Panel -->
+  <div id="displays-panel" class="displays-panel hidden">
+    <button class="panel-close">✕</button>
+    <h4 style="margin: 0 0 12px; font-size: 14px; color: var(--text-muted);">Select Display</h4>
+    <div id="displays-list" class="displays-list">
+      <p class="text-muted text-sm">Loading displays...</p>
+    </div>
+  </div>
+
   <!-- Special Keys Panel -->
   <div id="special-keys" class="special-keys hidden">
     <button class="panel-close">✕</button>
@@ -99,6 +108,7 @@
 
   <!-- Bottom Action Bar (always visible on mobile) -->
   <div id="action-bar" class="action-bar">
+    <button id="btn-screens" class="action-btn"><span class="action-icon">🖥️</span><span class="action-label">Screens</span></button>
     <button id="btn-mode" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">Trackpad</span></button>
     <button id="btn-keyboard" class="action-btn"><span class="action-icon">⌨️</span><span class="action-label">Keyboard</span></button>
     <button id="btn-keys" class="action-btn"><span class="action-icon">🔧</span><span class="action-label">Keys</span></button>

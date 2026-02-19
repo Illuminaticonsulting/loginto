@@ -136,6 +136,23 @@ function connect() {
     capture.setFPS(data.fps);
   });
 
+  // ─── Multi-Monitor ────────────────────────────────────
+  socket.on('list-screens', () => {
+    const displays = capture.getDisplays();
+    socket.emit('displays-list', displays);
+  });
+
+  socket.on('switch-screen', async (data) => {
+    const newInfo = await capture.switchDisplay(data.displayId);
+    if (newInfo) {
+      newInfo.inputWidth = input.screenWidth;
+      newInfo.inputHeight = input.screenHeight;
+      socket.emit('screen-info', newInfo);
+      // Also send updated display list (active flag changes)
+      socket.emit('displays-list', capture.getDisplays());
+    }
+  });
+
   // ─── Input Relay ───────────────────────────────────────
   socket.on('mouse-move', (data) => {
     input.moveMouse(data.x, data.y);

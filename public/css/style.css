@@ -989,6 +989,72 @@ code {
   bottom: 64px; /* above action bar */
 }
 
+/* ─── Displays Panel ────────────────────────────────────── */
+
+.displays-panel {
+  position: fixed;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  padding: 16px 12px 12px;
+  z-index: 300;
+  transition: transform 0.25s ease;
+}
+
+.displays-panel.hidden {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.displays-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.display-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+}
+
+.display-btn:active {
+  background: var(--bg-hover);
+  transform: scale(0.98);
+}
+
+.display-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.display-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.display-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ─── Responsive ────────────────────────────────────────── */
 
 @media (max-width: 480px) {
@@ -1030,6 +1096,17 @@ code {
   }
 
   .special-keys.hidden {
+    transform: translateX(-50%) translateY(100%);
+  }
+
+  .displays-panel {
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 400px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .displays-panel.hidden {
     transform: translateX(-50%) translateY(100%);
   }
 

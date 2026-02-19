@@ -89,6 +89,8 @@
   const fpsSlider = $('#fps-slider');
   const fpsVal    = $('#fps-value');
   const kbInput   = $('#keyboard-input');
+  const displaysPanel = $('#displays-panel');
+  const displaysList  = $('#displays-list');
 
   // Frame double-buffer
   const img = new Image();
@@ -147,6 +149,11 @@
     });
 
     S.socket.on('frame', onFrame);
+
+    // Multi-monitor: receive display list from agent
+    S.socket.on('displays-list', displays => {
+      renderDisplays(displays);
+    });
 
     setInterval(() => {
       S.currentFPS = S.fpsCounter; S.fpsCounter = 0;
@@ -347,8 +354,9 @@
     closeAllPanels();
     S.panelOpen = name;
     backdrop.classList.add('visible');
-    if (name === 'toolbar') toolbar.classList.remove('hidden');
-    if (name === 'keys')    keysPanel.classList.remove('hidden');
+    if (name === 'toolbar')  toolbar.classList.remove('hidden');
+    if (name === 'keys')     keysPanel.classList.remove('hidden');
+    if (name === 'displays') displaysPanel.classList.remove('hidden');
   }
 
   function closeAllPanels() {
@@ -356,6 +364,7 @@
     backdrop.classList.remove('visible');
     toolbar.classList.add('hidden');
     keysPanel.classList.add('hidden');
+    displaysPanel.classList.add('hidden');
   }
 
   backdrop.addEventListener('click', closeAllPanels);
@@ -669,6 +678,12 @@
 
   on('btn-keyboard', () => { closeAllPanels(); kbInput.focus(); kbInput.click(); });
 
+  on('btn-screens', () => {
+    if (S.panelOpen === 'displays') { closeAllPanels(); return; }
+    S.socket?.emit('list-screens');
+    openPanel('displays');
+  });
+
   on('btn-keys', () => {
     if (S.panelOpen === 'keys') closeAllPanels(); else openPanel('keys');
   });
@@ -719,6 +734,36 @@
 
   // Helpers
   function on(id, fn) { const el = $('#' + id); if (el) el.addEventListener('click', fn); }
+
+  // ───────────────────────────────────────────────────────
+  //  MULTI-MONITOR DISPLAY PICKER
+  // ───────────────────────────────────────────────────────
+
+  function renderDisplays(displays) {
+    if (!displaysList) return;
+    if (!displays || displays.length === 0) {
+      displaysList.innerHTML = '<p class="text-muted text-sm">No displays detected</p>';
+      return;
+    }
+    displaysList.innerHTML = '';
+    displays.forEach((d, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'display-btn' + (d.active ? ' active' : '');
+      btn.innerHTML =
+        '<span class="display-icon">' + (d.active ? '🟢' : '🖥️') + '</span>' +
+        '<span class="display-name">' + (d.name || ('Display ' + (i + 1))) + '</span>';
+      btn.addEventListener('click', () => {
+        if (d.active) { closeAllPanels(); return; }
+        // Show switching state
+        displaysList.querySelectorAll('.display-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        btn.querySelector('.display-icon').textContent = '⏳';
+        S.socket?.emit('switch-screen', { displayId: d.id });
+        setTimeout(closeAllPanels, 600);
+      });
+      displaysList.appendChild(btn);
+    });
+  }
 
   // Prevent iOS pinch-zoom on the page itself
   document.addEventListener('gesturestart', e => e.preventDefault());

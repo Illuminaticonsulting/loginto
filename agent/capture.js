@@ -8,7 +8,7 @@
  * Key quality settings (like LogMeIn):
  *  - 4:4:4 chroma subsampling (no color blur on text)
  *  - lanczos3 resampling (sharp downscale, no jagged edges)
- *  - High quality default (92)
+ *  - Multi-monitor support via listDisplays / switchDisplay
  */
 
 const screenshot = require('screenshot-desktop');
@@ -25,21 +25,42 @@ class ScreenCapture {
     this.screenHeight = 1080;
     this.lastFrame = null;
     this.frameCount = 0;
-    this.capturing = false; // prevent overlapping captures
+    this.capturing = false;
 
-    // Detect screen resolution
+    // Multi-monitor
+    this.displays = [];        // [{ id, name }, ...]
+    this.activeDisplayId = null; // null = default/primary
+
+    // Detect screen resolution + displays
     this._detectScreen();
   }
 
   async _detectScreen() {
     try {
-      const img = await screenshot({ format: 'png' });
+      // List all displays
+      try {
+        this.displays = await screenshot.listDisplays();
+        if (this.displays.length > 0) {
+          this.activeDisplayId = this.displays[0].id;
+          console.log(`🖥️  Displays found: ${this.displays.length}`);
+          this.displays.forEach((d, i) => {
+            console.log(`   ${i + 1}. ${d.name || 'Display ' + (i + 1)} (id: ${d.id})`);
+          });
+        }
+      } catch (e) {
+        console.log('   ℹ️  Multi-monitor detection not available');
+      }
+
+      // Capture a test frame to get resolution
+      const captureOpts = { format: 'png' };
+      if (this.activeDisplayId != null) captureOpts.screen = this.activeDisplayId;
+      const img = await screenshot(captureOpts);
       const metadata = await sharp(img).metadata();
       this.screenWidth = metadata.width;
       this.screenHeight = metadata.height;
-      console.log(`🖥️  Screen detected: ${this.screenWidth}x${this.screenHeight}`);
+      console.log(`🖥️  Active screen: ${this.screenWidth}x${this.screenHeight}`);
 
-      // Auto-detect retina: if resolution is very high, scale down to logical pixels
+      // Auto-detect retina
       if (this.scale >= 1.0 && (this.screenWidth > 2500 || this.screenHeight > 1600)) {
         this.scale = 0.5;
         console.log(`🔍 Retina detected — auto-scaling to 0.5x (${Math.round(this.screenWidth * this.scale)}x${Math.round(this.screenHeight * this.scale)})`);
@@ -47,6 +68,51 @@ class ScreenCapture {
     } catch (err) {
       console.warn('⚠️  Could not detect screen size, using defaults');
     }
+  }
+
+  getDisplays() {
+    return this.displays.map((d, i) => ({
+      id: d.id,
+      name: d.name || 'Display ' + (i + 1),
+      active: d.id === this.activeDisplayId
+    }));
+  }
+
+  async switchDisplay(displayId) {
+    const display = this.displays.find(d => d.id === displayId || String(d.id) === String(displayId));
+    if (!display) {
+      console.warn(`⚠️  Display ${displayId} not found`);
+      return null;
+    }
+
+    const wasStreaming = this.streaming;
+    const cb = this._currentCallback;
+    if (wasStreaming) this.stopStreaming();
+
+    this.activeDisplayId = display.id;
+    console.log(`📺 Switched to display: ${display.name || display.id}`);
+
+    // Re-detect resolution for new display
+    try {
+      const img = await screenshot({ format: 'png', screen: this.activeDisplayId });
+      const metadata = await sharp(img).metadata();
+      this.screenWidth = metadata.width;
+      this.screenHeight = metadata.height;
+
+      // Re-check retina for this display
+      this.scale = 1.0;
+      if (this.screenWidth > 2500 || this.screenHeight > 1600) {
+        this.scale = 0.5;
+      }
+      console.log(`🖥️  New screen: ${this.screenWidth}x${this.screenHeight} (scale ${this.scale}x)`);
+    } catch (e) {
+      console.warn('⚠️  Could not detect new display size');
+    }
+
+    // Resume streaming if it was running
+    if (wasStreaming && cb) this.startStreaming(cb);
+
+    return this.getScreenInfo();
   }
 
   getScreenInfo() {
@@ -59,7 +125,9 @@ class ScreenCapture {
       scaledHeight: sh,
       quality: this.quality,
       fps: this.fps,
-      scale: this.scale
+      scale: this.scale,
+      displayId: this.activeDisplayId,
+      displayCount: this.displays.length
     };
   }
 
@@ -87,7 +155,7 @@ class ScreenCapture {
     this.streaming = true;
     this._currentCallback = callback;
     this.frameCount = 0;
-    console.log(`🎬 Streaming: ${this.fps} FPS, quality ${this.quality}, scale ${this.scale}x, chroma 4:4:4`);
+    console.log(`🎬 Streaming: ${this.fps} FPS, quality ${this.quality}, scale ${this.scale}x, display ${this.activeDisplayId}`);
     this._startInterval(callback);
   }
 
@@ -121,11 +189,12 @@ class ScreenCapture {
   }
 
   async _captureFrame() {
-    const img = await screenshot({ format: 'png' });
+    const captureOpts = { format: 'png' };
+    if (this.activeDisplayId != null) captureOpts.screen = this.activeDisplayId;
+    const img = await screenshot(captureOpts);
 
     let pipeline = sharp(img);
 
-    // Only resize if scale < 1.0 (saves CPU when sending full res)
     if (this.scale < 0.99) {
       pipeline = pipeline.resize(
         Math.round(this.screenWidth * this.scale),
@@ -138,7 +207,7 @@ class ScreenCapture {
       .jpeg({
         quality: this.quality,
         mozjpeg: false,
-        chromaSubsampling: '4:4:4'  // Full color — no blur on colored text
+        chromaSubsampling: '4:4:4'
       })
       .toBuffer();
 

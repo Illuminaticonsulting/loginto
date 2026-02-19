@@ -318,6 +318,15 @@ io.on('connection', (socket) => {
       });
     });
 
+    // Relay displays-list from agent → viewer
+    socket.on('displays-list', (displays) => {
+      io.sockets.sockets.forEach(s => {
+        if (s.userId === socket.userId && s.role === 'viewer') {
+          s.emit('displays-list', displays);
+        }
+      });
+    });
+
     socket.on('disconnect', () => {
       console.log(`🖥️  Agent offline: ${socket.displayName || socket.userId}`);
       agents.delete(socket.userId);
@@ -367,6 +376,16 @@ io.on('connection', (socket) => {
     socket.on('update-fps', (data) => {
       const a = agents.get(socket.userId);
       if (a?.connected) a.socket.emit('update-fps', data);
+    });
+
+    // Multi-monitor
+    socket.on('list-screens', () => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('list-screens');
+    });
+    socket.on('switch-screen', (data) => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('switch-screen', data);
     });
 
     socket.on('disconnect', () => {
