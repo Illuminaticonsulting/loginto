@@ -1297,3 +1297,16 @@ body.fullscreen .action-bar:active {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ─── Connection Quality Pill ───────────────────────────── */
+.quality-pill {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-right: 8px;
+}
+.q-good { color: #4ade80; }
+.q-fair { color: #facc15; }
+.q-poor { color: #f87171; }

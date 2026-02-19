@@ -161,6 +161,11 @@
     });
     S.socket.on('kicked', () => { alert('Another device connected.'); window.location.href = '/dashboard.html'; });
 
+    // Server restart notification
+    S.socket.on('server-shutdown', () => {
+      showToast('Server restarting — will reconnect automatically', true);
+    });
+
     S.socket.on('agent-status', d => {
       if (d.connected) { overlay.style.display = 'none'; setStatus('Connected', false); }
       else { overlay.style.display = 'flex'; setStatus('Machine Offline', true); }
@@ -183,10 +188,14 @@
     S.socket.on('frame', onFrame);
 
     // Latency measurement — real roundtrip ping/pong
+    let latencyHistory = [];
     S.socket.on('latency-pong', (data) => {
       if (data && data.t) {
         const rtt = performance.now() - data.t;
         latEl.textContent = Math.round(rtt) + 'ms';
+        latencyHistory.push(rtt);
+        if (latencyHistory.length > 10) latencyHistory.shift();
+        updateQualityPill(rtt);
       }
     });
 
@@ -218,6 +227,24 @@
   function setStatus(t, err) {
     statText.textContent = t;
     statDot.classList.toggle('error', err);
+  }
+
+  // ───────────────────────────────────────────────────────
+  //  CONNECTION QUALITY INDICATOR
+  // ───────────────────────────────────────────────────────
+  const qualPill = document.createElement('span');
+  qualPill.className = 'quality-pill';
+  qualPill.textContent = '●';
+  const stRight = $('.status-right');
+  if (stRight) stRight.prepend(qualPill);
+
+  function updateQualityPill(rtt) {
+    let level, label;
+    if (rtt < 80 && S.currentFPS >= 12)        { level = 'good'; label = 'Good'; }
+    else if (rtt < 200 && S.currentFPS >= 5)    { level = 'fair'; label = 'Fair'; }
+    else                                         { level = 'poor'; label = 'Poor'; }
+    qualPill.className = 'quality-pill q-' + level;
+    qualPill.textContent = '● ' + label;
   }
 
   // ───────────────────────────────────────────────────────
@@ -941,6 +968,17 @@
 
   on('clipboard-fetch', () => {
     S.socket?.emit('clipboard-read');
+  });
+
+  on('btn-screenshot', () => {
+    if (!canvas.width || !canvas.height) return;
+    try {
+      const link = document.createElement('a');
+      link.download = 'loginto-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('Screenshot saved');
+    } catch (e) { showToast('Screenshot failed'); }
   });
 
   on('btn-fullscreen', () => {

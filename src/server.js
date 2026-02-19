@@ -78,7 +78,7 @@ setInterval(() => {
   const now = Date.now();
   let cleaned = 0;
   for (const [token, session] of sessions) {
-    if (now - session.created > SESSION_TTL) {
+    if (now - session.lastActive > SESSION_TTL) {
       sessions.delete(token);
       cleaned++;
     }
@@ -89,11 +89,13 @@ setInterval(() => {
 function isValidSession(token) {
   const session = sessions.get(token);
   if (!session) return false;
-  if (Date.now() - session.created > SESSION_TTL) {
+  const now = Date.now();
+  // Expire if inactive for 24h (not just since creation)
+  if (now - session.lastActive > SESSION_TTL) {
     sessions.delete(token);
     return false;
   }
-  session.lastActive = Date.now();
+  session.lastActive = now;
   return true;
 }
 

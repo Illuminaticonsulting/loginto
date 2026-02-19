@@ -177,9 +177,10 @@ class ScreenCapture {
     // Adaptive quality check every 2 seconds
     this._adaptiveInterval = setInterval(() => this._adaptiveCheck(), 2000);
 
-    this.interval = setInterval(async () => {
-      if (!this.streaming || this.capturing) return;
-      this.capturing = true;
+    // Use setTimeout chaining instead of setInterval to prevent overlapping captures
+    const captureLoop = async () => {
+      if (!this.streaming) return;
+      const loopStart = Date.now();
 
       try {
         const frame = await this._captureFrame();
@@ -188,30 +189,34 @@ class ScreenCapture {
           const hash = crypto.createHash('md5').update(frame).digest('hex');
           if (hash === this.lastFrameHash) {
             this.skippedFrames++;
-            this.capturing = false;
-            return;
+          } else {
+            this.lastFrameHash = hash;
+            this.frameCount++;
+            this._fpsCounter++;
+            // Send raw buffer (binary) instead of base64 — 33% less bandwidth
+            callback({
+              buf: frame,
+              width: Math.round(this.screenWidth * this.scale),
+              height: Math.round(this.screenHeight * this.scale),
+              timestamp: Date.now(),
+              frame: this.frameCount
+            });
           }
-          this.lastFrameHash = hash;
-
-          this.frameCount++;
-          this._fpsCounter++;
-          // Send raw buffer (binary) instead of base64 — 33% less bandwidth
-          callback({
-            buf: frame,
-            width: Math.round(this.screenWidth * this.scale),
-            height: Math.round(this.screenHeight * this.scale),
-            timestamp: Date.now(),
-            frame: this.frameCount
-          });
         }
       } catch (err) {
         if (this.frameCount === 0) {
           console.error('❌ Screen capture error:', err.message);
         }
-      } finally {
-        this.capturing = false;
       }
-    }, intervalMs);
+
+      // Schedule next capture accounting for actual capture time
+      if (this.streaming) {
+        const elapsed = Date.now() - loopStart;
+        const delay = Math.max(0, intervalMs - elapsed);
+        this.interval = setTimeout(captureLoop, delay);
+      }
+    };
+    this.interval = setTimeout(captureLoop, 0);
   }
 
   _adaptiveCheck() {
@@ -262,7 +267,7 @@ class ScreenCapture {
   stopStreaming() {
     this.streaming = false;
     if (this.interval) {
-      clearInterval(this.interval);
+      clearTimeout(this.interval);
       this.interval = null;
     }
     if (this._adaptiveInterval) {
