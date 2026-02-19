@@ -143,6 +143,8 @@
       canvas.width = info.scaledWidth;
       canvas.height = info.scaledHeight;
       S.cursorX = (info.inputWidth || info.width) / 2;
+      // Show cursor immediately at center
+      setTimeout(() => updateCursor(), 100);
       S.cursorY = (info.inputHeight || info.height) / 2;
       S.zoom = 1;
       computeFit();
@@ -310,8 +312,12 @@
     const x = S.cursorX / iw * canvas.width  * ts + S.panX;
     const y = S.cursorY / ih * canvas.height * ts + S.panY;
     cursor.style.transform = 'translate(' + x + 'px,' + y + 'px)';
-    cursor.style.display = 'block';
+    showCursor();
     cursor.classList.toggle('dragging', S.isDragging);
+  }
+
+  function showCursor() {
+    if (cursor && cursor.style.display !== 'block') cursor.style.display = 'block';
   }
 
   function flashCursorClick() {
@@ -565,45 +571,94 @@
   //  DESKTOP MOUSE + KEYBOARD
   // ───────────────────────────────────────────────────────
 
-  canvas.addEventListener('mousemove', e => {
-    const c = clientToRemote(e.clientX, e.clientY);
-    S.cursorX = c.x; S.cursorY = c.y;
-    emitMove(); updateCursor();
-  });
+  // ───────────────────────────────────────────────────────
+  //  POINTER EVENTS (unified: mouse, touch-on-desktop, Vision Pro gaze+pinch)
+  //  Falls back to mouse events for older browsers.
+  // ───────────────────────────────────────────────────────
 
-  // ── Desktop drag state ──
+  const hasPointerEvents = 'PointerEvent' in window;
   let desktopDragging = false;
   let desktopDragMoved = false;
 
-  canvas.addEventListener('mousedown', e => {
-    if (e.button === 0) {
-      desktopDragging = true;
-      desktopDragMoved = false;
+  if (hasPointerEvents) {
+    // Pointer events cover mouse, pen, and Vision Pro gaze+pinch
+    canvas.addEventListener('pointermove', e => {
+      if (e.pointerType === 'touch') return; // handled by touchmove
       const c = clientToRemote(e.clientX, e.clientY);
       S.cursorX = c.x; S.cursorY = c.y;
-      S.socket?.emit('mouse-down', { x: c.x, y: c.y, button: 'left' });
-    }
-  });
+      if (desktopDragging) desktopDragMoved = true;
+      emitMove(); updateCursor();
+    });
 
-  document.addEventListener('mousemove', e => {
-    if (!desktopDragging) return;
-    desktopDragMoved = true;
-    const c = clientToRemote(e.clientX, e.clientY);
-    S.cursorX = c.x; S.cursorY = c.y;
-    emitMove(); updateCursor();
-  });
+    canvas.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') return; // handled by touchstart
+      if (e.button === 0) {
+        desktopDragging = true;
+        desktopDragMoved = false;
+        canvas.setPointerCapture(e.pointerId);
+        const c = clientToRemote(e.clientX, e.clientY);
+        S.cursorX = c.x; S.cursorY = c.y;
+        S.socket?.emit('mouse-down', { x: c.x, y: c.y, button: 'left' });
+        updateCursor();
+      }
+    });
 
-  document.addEventListener('mouseup', e => {
-    if (!desktopDragging) return;
-    desktopDragging = false;
-    const c = clientToRemote(e.clientX, e.clientY);
-    S.socket?.emit('mouse-up', { x: c.x, y: c.y, button: 'left' });
-    if (!desktopDragMoved) {
-      // It was a click, not a drag
-      S.socket?.emit('mouse-click', { x: c.x, y: c.y, button: 'left' });
-      flashCursorClick();
-    }
-  });
+    canvas.addEventListener('pointerup', e => {
+      if (e.pointerType === 'touch') return;
+      if (!desktopDragging) return;
+      desktopDragging = false;
+      const c = clientToRemote(e.clientX, e.clientY);
+      S.socket?.emit('mouse-up', { x: c.x, y: c.y, button: 'left' });
+      if (!desktopDragMoved) {
+        S.socket?.emit('mouse-click', { x: c.x, y: c.y, button: 'left' });
+        flashCursorClick();
+      }
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      if (desktopDragging) {
+        desktopDragging = false;
+        S.socket?.emit('mouse-up', { x: Math.round(S.cursorX), y: Math.round(S.cursorY), button: 'left' });
+      }
+    });
+  } else {
+    // Fallback: plain mouse events
+    canvas.addEventListener('mousemove', e => {
+      const c = clientToRemote(e.clientX, e.clientY);
+      S.cursorX = c.x; S.cursorY = c.y;
+      emitMove(); updateCursor();
+    });
+
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) {
+        desktopDragging = true;
+        desktopDragMoved = false;
+        const c = clientToRemote(e.clientX, e.clientY);
+        S.cursorX = c.x; S.cursorY = c.y;
+        S.socket?.emit('mouse-down', { x: c.x, y: c.y, button: 'left' });
+        updateCursor();
+      }
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!desktopDragging) return;
+      desktopDragMoved = true;
+      const c = clientToRemote(e.clientX, e.clientY);
+      S.cursorX = c.x; S.cursorY = c.y;
+      emitMove(); updateCursor();
+    });
+
+    document.addEventListener('mouseup', e => {
+      if (!desktopDragging) return;
+      desktopDragging = false;
+      const c = clientToRemote(e.clientX, e.clientY);
+      S.socket?.emit('mouse-up', { x: c.x, y: c.y, button: 'left' });
+      if (!desktopDragMoved) {
+        S.socket?.emit('mouse-click', { x: c.x, y: c.y, button: 'left' });
+        flashCursorClick();
+      }
+    });
+  }
 
   canvas.addEventListener('contextmenu', e => {
     e.preventDefault();

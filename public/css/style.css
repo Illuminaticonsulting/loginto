@@ -590,8 +590,8 @@ code {
 
 .cursor-indicator {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 0;
+  height: 0;
   pointer-events: none;
   display: none;
   z-index: 10;
@@ -601,53 +601,51 @@ code {
 .cursor-indicator::before {
   content: '';
   position: absolute;
-  top: 50%; left: 50%;
-  width: 4px; height: 4px;
-  background: var(--accent);
+  top: 0; left: 0;
+  width: 6px; height: 6px;
+  margin: -3px 0 0 -3px;
+  background: #ff3b30;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  box-shadow: 0 0 4px rgba(255,59,48,0.7);
 }
 
 .cursor-indicator::after {
   content: '';
   position: absolute;
-  top: 50%; left: 50%;
-  width: 20px; height: 20px;
-  border: 1.5px solid var(--accent);
+  top: 0; left: 0;
+  width: 22px; height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid rgba(255,255,255,0.85);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0.6;
-}
-
-.cursor-indicator.visible {
-  display: block;
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
 }
 
 .cursor-indicator.clicking::after {
-  width: 28px; height: 28px;
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
   border-color: var(--success);
   opacity: 1;
-  transition: all 0.15s;
+  transition: all 0.12s;
 }
 
 .cursor-indicator.clicking::before {
   background: var(--success);
-  width: 6px; height: 6px;
-}
-
-.cursor-indicator.trackpad-cursor::after {
-  border-color: var(--accent);
+  width: 8px; height: 8px;
+  margin: -4px 0 0 -4px;
+  box-shadow: 0 0 6px rgba(0,214,143,0.8);
 }
 
 .cursor-indicator.dragging::after {
   border-color: var(--warning);
-  width: 26px; height: 26px;
-  border-width: 2px;
+  width: 28px; height: 28px;
+  margin: -14px 0 0 -14px;
+  border-width: 2.5px;
   opacity: 1;
 }
 
 .cursor-indicator.dragging::before {
   background: var(--warning);
+  box-shadow: 0 0 5px rgba(255,165,2,0.8);
 }
 
 /* Offline Overlay */
@@ -787,6 +785,12 @@ code {
   bottom: 52px;
   left: 0;
   right: 0;
+  max-height: calc(100vh - 52px - 40px);
+  max-height: calc(100dvh - 52px - 40px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   background: var(--bg-elevated);
   border-top: 1px solid var(--border);
   padding: 16px 12px 12px;
@@ -814,7 +818,7 @@ code {
 
 .shortcut-combos {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 
