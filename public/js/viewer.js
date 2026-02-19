@@ -104,13 +104,26 @@
   let transformDirty = false;
 
   // Cached container rect (avoid per-event getBoundingClientRect)
+  // Re-fetched on every touch/pointer event for accuracy on mobile
   let cachedBoxRect = { x: 0, y: 0 };
+  let boxRectDirty = true;
   function updateBoxRect() {
     const r = box.getBoundingClientRect();
     cachedBoxRect = { x: r.left, y: r.top };
+    boxRectDirty = false;
   }
-  window.addEventListener('resize', updateBoxRect);
-  window.addEventListener('scroll', updateBoxRect, true);
+  function markBoxRectDirty() { boxRectDirty = true; }
+  window.addEventListener('resize', markBoxRectDirty);
+  window.addEventListener('scroll', markBoxRectDirty, true);
+  window.addEventListener('orientationchange', () => {
+    // Orientation change fires before layout settles — recompute after delay
+    setTimeout(() => { markBoxRectDirty(); if (S.screenInfo) computeFit(); }, 200);
+  });
+  // iOS visual viewport changes (URL bar show/hide, keyboard)
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', markBoxRectDirty);
+    window.visualViewport.addEventListener('scroll', markBoxRectDirty);
+  }
   setTimeout(updateBoxRect, 0);
 
   // Touch smoothing state (EMA)
@@ -134,7 +147,7 @@
     .catch(() => initSocket());
 
   // Recompute fit on resize
-  window.addEventListener('resize', () => { if (S.screenInfo) computeFit(); updateBoxRect(); });
+  window.addEventListener('resize', () => { if (S.screenInfo) computeFit(); markBoxRectDirty(); });
 
   // ───────────────────────────────────────────────────────
   //  SOCKET
@@ -149,7 +162,7 @@
     });
 
     S.socket.on('connect', () => {
-      S.connected = true; setStatus('Connected', false); updateBoxRect();
+      S.connected = true; setStatus('Connected', false); markBoxRectDirty();
       if (S._wasDisconnected) { showToast('Reconnected'); S._wasDisconnected = false; }
     });
     S.socket.on('disconnect', () => {
@@ -422,6 +435,9 @@
   // ───────────────────────────────────────────────────────
 
   function containerOffset() {
+    // Always use fresh rect — mobile browsers shift layout dynamically
+    // (URL bar, safe areas, keyboard, orientation)
+    if (boxRectDirty) updateBoxRect();
     return cachedBoxRect;
   }
 
@@ -554,6 +570,8 @@
 
   canvas.addEventListener('touchstart', e => {
     e.preventDefault();
+    // Refresh container rect on every touch — catches all layout shifts
+    updateBoxRect();
     const t = e.touches;
 
     if (S.panelOpen) { closeAllPanels(); return; }
@@ -565,6 +583,8 @@
       S.touchStartTime = Date.now();
       S.touchMoved = false;
       S.longPressFired = false;
+      // Reset EMA smoothing state on each new touch — prevents drift
+      smoothDX = 0; smoothDY = 0;
 
       clearTimeout(S.longPressTimer);
       S.longPressTimer = setTimeout(() => {
@@ -744,6 +764,7 @@
 
     canvas.addEventListener('pointerdown', e => {
       if (e.pointerType === 'touch') return; // handled by touchstart
+      updateBoxRect(); // refresh container rect for accurate coordinates
       if (e.button === 0) {
         desktopDragging = true;
         desktopDragMoved = false;
