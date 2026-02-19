@@ -460,6 +460,14 @@
   //  CURSOR POSITION (display + emit)
   // ───────────────────────────────────────────────────────
 
+  // Cursor auto-fade timer (hide after idle)
+  let cursorFadeTimer = null;
+  function resetCursorFade() {
+    if (cursorFadeTimer) clearTimeout(cursorFadeTimer);
+    cursor.classList.remove('fading');
+    cursorFadeTimer = setTimeout(() => cursor.classList.add('fading'), 1500);
+  }
+
   function updateCursor() {
     if (!S.screenInfo || !cursor) return;
     const ts = totalScale();
@@ -468,9 +476,9 @@
     const x = S.cursorX / iw * canvas.width  * ts + S.panX;
     const y = S.cursorY / ih * canvas.height * ts + S.panY;
     cursor.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
-    // Always force display — cursor must be visible
     cursor.style.display = 'block';
     cursor.classList.toggle('dragging', S.isDragging);
+    resetCursorFade();
   }
 
   function showCursor() {
@@ -479,6 +487,7 @@
 
   function flashCursorClick() {
     cursor.classList.add('clicking');
+    cursor.classList.remove('fading');
     setTimeout(() => cursor.classList.remove('clicking'), 200);
   }
 
