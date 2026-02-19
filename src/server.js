@@ -355,12 +355,13 @@ Invoke-WebRequest -Uri "${serverURL}/agent-files/agent.js"  -OutFile "agent.js" 
 Invoke-WebRequest -Uri "${serverURL}/agent-files/capture.js" -OutFile "capture.js" -UseBasicParsing
 Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"   -OutFile "input.js"   -UseBasicParsing
 
-# Install dependencies (install all except robotjs, then force sharp platform binaries)
+# Clean any broken sharp install and reinstall everything
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-$env:npm_config_optional = "false"
+if (Test-Path "node_modules\\sharp") { Remove-Item -Recurse -Force "node_modules\\sharp" 2>$null }
+if (Test-Path "node_modules\\@img") { Remove-Item -Recurse -Force "node_modules\\@img" 2>$null }
 & npm install --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
-# Force-install sharp with platform binaries (npm sometimes skips them)
-& npm install --os=win32 --cpu=x64 sharp --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
+# Explicitly install sharp's Windows native binary
+& npm install @img/sharp-win32-x64 --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
 Write-Host "[OK] Dependencies installed" -ForegroundColor Green
 
 # Try robotjs (optional — usually fails without C++ build tools, that's OK)
