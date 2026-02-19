@@ -154,6 +154,14 @@
 
     S.socket.on('frame', onFrame);
 
+    // Latency measurement — real roundtrip ping/pong
+    S.socket.on('latency-pong', (data) => {
+      if (data && data.t) {
+        const rtt = performance.now() - data.t;
+        latEl.textContent = Math.round(rtt) + 'ms';
+      }
+    });
+
     // Multi-monitor: receive display list from agent
     S.socket.on('displays-list', displays => {
       renderDisplays(displays);
@@ -172,6 +180,11 @@
       S.currentFPS = S.fpsCounter; S.fpsCounter = 0;
       fpsEl.textContent = S.currentFPS + ' FPS';
     }, 1000);
+
+    // Latency ping every 2 seconds
+    setInterval(() => {
+      if (S.socket && S.connected) S.socket.emit('latency-ping', { t: performance.now() });
+    }, 2000);
   }
 
   function setStatus(t, err) {
@@ -201,6 +214,13 @@
     if (framePending) return;        // drop frame if previous still decoding
     framePending = true;
 
+    // Support both binary (ArrayBuffer/Buffer) and legacy base64 frames
+    let blobUrl;
+    if (data.data instanceof ArrayBuffer || data.data instanceof Uint8Array) {
+      const blob = new Blob([data.data], { type: 'image/jpeg' });
+      blobUrl = URL.createObjectURL(blob);
+    }
+
     img.onload = () => {
       if (canvas.width !== data.width || canvas.height !== data.height) {
         canvas.width = data.width;
@@ -209,10 +229,16 @@
       }
       ctx.drawImage(img, 0, 0);
       framePending = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
       applyTransform();
     };
-    img.onerror = () => { framePending = false; };
-    img.src = 'data:image/jpeg;base64,' + data.data;
+    img.onerror = () => { framePending = false; if (blobUrl) URL.revokeObjectURL(blobUrl); };
+
+    if (blobUrl) {
+      img.src = blobUrl;
+    } else {
+      img.src = 'data:image/jpeg;base64,' + data.data;
+    }
   }
 
   // ───────────────────────────────────────────────────────

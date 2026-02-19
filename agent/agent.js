@@ -117,9 +117,9 @@ function connect() {
     console.log('   📱 Viewer connected — streaming started');
     capture.startStreaming((frameData) => {
       if (socket.connected) {
-        // Send frame buffer as binary + metadata separately for efficiency
+        // Send frame as binary Buffer — 33% smaller than base64 encoding
         socket.volatile.emit('frame', {
-          data: frameData.buf.toString('base64'),
+          data: frameData.buf,              // raw Buffer (Socket.IO handles binary natively)
           width: frameData.width,
           height: frameData.height,
           timestamp: frameData.timestamp,

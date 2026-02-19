@@ -17,6 +17,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const helmet = require('helmet');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const users = require('./users');
@@ -34,7 +35,8 @@ const io = new Server(server, {
   cors: { origin: false },
   maxHttpBufferSize: 10e6,
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  perMessageDeflate: false  // JPEG is already compressed; deflate adds CPU cost
 });
 
 // Security headers
@@ -51,6 +53,7 @@ app.use(helmet({
   }
 }));
 
+app.use(compression());           // gzip for static files + API responses
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -66,12 +69,27 @@ const loginLimiter = rateLimit({
 // ─── State ───────────────────────────────────────────────
 const sessions = new Map();  // token → { userId, created, lastActive }
 const agents = new Map();    // userId → { socket, screenInfo, connected }
-const viewers = new Map();   // userId → { socket, connected }
+// Viewers now tracked via Socket.IO rooms: `viewers:${userId}`
+// No Map needed — rooms handle multi-viewer broadcast efficiently
+
+// ─── Session Cleanup (every 10 min, expire after 24h) ────
+const SESSION_TTL = 24 * 60 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [token, session] of sessions) {
+    if (now - session.created > SESSION_TTL) {
+      sessions.delete(token);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) console.log(`🧹 Cleaned ${cleaned} expired sessions (${sessions.size} active)`);
+}, 10 * 60 * 1000);
 
 function isValidSession(token) {
   const session = sessions.get(token);
   if (!session) return false;
-  if (Date.now() - session.created > 24 * 60 * 60 * 1000) {
+  if (Date.now() - session.created > SESSION_TTL) {
     sessions.delete(token);
     return false;
   }
@@ -110,6 +128,13 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
   console.log(`✅ ${user.displayName} logged in`);
   res.json({ token, userId: user.id, displayName: user.displayName });
+});
+
+// Logout endpoint — invalidate session
+app.post('/api/logout', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) sessions.delete(token);
+  res.json({ ok: true });
 });
 
 // Session check
@@ -278,6 +303,12 @@ io.use((socket, next) => {
   }
 });
 
+// ─── Room helpers ────────────────────────────────────────
+// Room naming: "viewers:<userId>" for all viewers of a user
+//              "user:<userId>" for all sockets (viewers + dashboards) of a user
+function viewerRoom(userId) { return `viewers:${userId}`; }
+function userRoom(userId)   { return `user:${userId}`; }
+
 // ─── Socket.IO Connection Handler ────────────────────────
 io.on('connection', (socket) => {
 
@@ -293,57 +324,34 @@ io.on('connection', (socket) => {
 
     agents.set(socket.userId, { socket, screenInfo: null, connected: true });
 
-    // Notify all viewers/dashboards for this user
-    io.sockets.sockets.forEach(s => {
-      if (s.userId === socket.userId && s.role !== 'agent') {
-        s.emit('agent-status', { connected: true });
-      }
-    });
+    // Notify all viewers/dashboards for this user via room
+    io.to(userRoom(socket.userId)).emit('agent-status', { connected: true });
 
     socket.on('screen-info', (info) => {
       const agent = agents.get(socket.userId);
       if (agent) agent.screenInfo = info;
-      io.sockets.sockets.forEach(s => {
-        if (s.userId === socket.userId && s.role === 'viewer') {
-          s.emit('screen-info', info);
-        }
-      });
+      io.to(viewerRoom(socket.userId)).emit('screen-info', info);
     });
 
+    // Frame relay — uses volatile + room broadcast (O(1) lookup instead of O(n) forEach)
     socket.on('frame', (frameData) => {
-      io.sockets.sockets.forEach(s => {
-        if (s.userId === socket.userId && s.role === 'viewer' && s.connected) {
-          s.volatile.emit('frame', frameData);
-        }
-      });
+      io.to(viewerRoom(socket.userId)).volatile.emit('frame', frameData);
     });
 
-    // Relay displays-list from agent → viewer
+    // Relay displays-list from agent → viewers
     socket.on('displays-list', (displays) => {
-      io.sockets.sockets.forEach(s => {
-        if (s.userId === socket.userId && s.role === 'viewer') {
-          s.emit('displays-list', displays);
-        }
-      });
+      io.to(viewerRoom(socket.userId)).emit('displays-list', displays);
     });
 
-    // Relay clipboard-content from agent → viewer
+    // Relay clipboard-content from agent → viewers
     socket.on('clipboard-content', (data) => {
-      io.sockets.sockets.forEach(s => {
-        if (s.userId === socket.userId && s.role === 'viewer') {
-          s.emit('clipboard-content', data);
-        }
-      });
+      io.to(viewerRoom(socket.userId)).emit('clipboard-content', data);
     });
 
     socket.on('disconnect', () => {
       console.log(`🖥️  Agent offline: ${socket.displayName || socket.userId}`);
       agents.delete(socket.userId);
-      io.sockets.sockets.forEach(s => {
-        if (s.userId === socket.userId && s.role !== 'agent') {
-          s.emit('agent-status', { connected: false });
-        }
-      });
+      io.to(userRoom(socket.userId)).emit('agent-status', { connected: false });
     });
   }
 
@@ -351,12 +359,9 @@ io.on('connection', (socket) => {
   else if (socket.role === 'viewer') {
     console.log(`📱 Viewer connected: ${socket.userId}`);
 
-    const existing = viewers.get(socket.userId);
-    if (existing?.connected) {
-      existing.socket.emit('kicked', { reason: 'Another device connected' });
-      existing.socket.disconnect();
-    }
-    viewers.set(socket.userId, { socket, connected: true });
+    // Join rooms (supports multiple concurrent viewers per user)
+    socket.join(viewerRoom(socket.userId));
+    socket.join(userRoom(socket.userId));
 
     const agent = agents.get(socket.userId);
     if (agent?.connected) {
@@ -407,19 +412,29 @@ io.on('connection', (socket) => {
       if (a?.connected) a.socket.emit('clipboard-read');
     });
 
+    // Latency ping — viewer sends 'latency-ping', server echoes back immediately
+    socket.on('latency-ping', (data) => {
+      socket.emit('latency-pong', data);
+    });
+
     socket.on('disconnect', () => {
       console.log(`📱 Viewer disconnected: ${socket.userId}`);
-      viewers.delete(socket.userId);
-      const agent = agents.get(socket.userId);
-      if (agent?.connected) agent.socket.emit('stop-streaming');
+      // Room membership auto-cleaned by Socket.IO on disconnect
+      // Stop streaming only if no viewers left in the room
+      const room = io.sockets.adapter.rooms.get(viewerRoom(socket.userId));
+      if (!room || room.size === 0) {
+        const agent = agents.get(socket.userId);
+        if (agent?.connected) agent.socket.emit('stop-streaming');
+      }
     });
   }
 
   // ═══ DASHBOARD (lightweight status listener) ═══
   else if (socket.role === 'dashboard') {
+    socket.join(userRoom(socket.userId));
     const agent = agents.get(socket.userId);
     socket.emit('agent-status', { connected: agent?.connected || false });
-    socket.on('disconnect', () => { /* no cleanup */ });
+    socket.on('disconnect', () => { /* room auto-cleaned */ });
   }
 });
 
