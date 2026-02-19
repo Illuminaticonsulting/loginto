@@ -21,9 +21,9 @@ const InputHandler = require('./input');
 // ─── Config ──────────────────────────────────────────────
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3456';
 const AGENT_KEY = process.env.AGENT_KEY;
-const CAPTURE_QUALITY = parseInt(process.env.CAPTURE_QUALITY) || 60;
-const CAPTURE_FPS = parseInt(process.env.CAPTURE_FPS) || 15;
-const CAPTURE_SCALE = parseFloat(process.env.CAPTURE_SCALE) || 0.5;
+const CAPTURE_QUALITY = parseInt(process.env.CAPTURE_QUALITY) || 80;
+const CAPTURE_FPS = parseInt(process.env.CAPTURE_FPS) || 20;
+const CAPTURE_SCALE = parseFloat(process.env.CAPTURE_SCALE) || 0.75;
 
 if (!AGENT_KEY) {
   console.error('');

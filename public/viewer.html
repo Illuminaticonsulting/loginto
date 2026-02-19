@@ -22,6 +22,9 @@
     <a href="/dashboard.html" class="btn-back">Back to Dashboard</a>
   </div>
 
+  <!-- Panel Backdrop (closes panels when tapped) -->
+  <div id="panel-backdrop" class="panel-backdrop"></div>
+
   <!-- Status Bar -->
   <div id="status-bar" class="status-bar">
     <div class="status-left">
@@ -33,9 +36,6 @@
     <div class="status-right">
       <span id="fps-display">-- FPS</span>
       <span id="latency-display">-- ms</span>
-      <button id="toolbar-toggle" class="icon-btn" title="Settings">⚙️</button>
-      <button id="fullscreen-btn" class="icon-btn" title="Fullscreen">⛶</button>
-      <button id="disconnect-btn" class="icon-btn disconnect" title="Disconnect">✕</button>
     </div>
   </div>
 
@@ -46,24 +46,18 @@
     <div id="zoom-indicator" class="zoom-indicator">100%</div>
   </div>
 
-  <!-- Floating Toolbar -->
+  <!-- Floating Toolbar (Settings) -->
   <div id="toolbar" class="toolbar hidden">
+    <button class="panel-close">✕</button>
     <div class="toolbar-section">
       <label>Quality</label>
-      <input type="range" id="quality-slider" min="10" max="100" value="60" step="5">
-      <span id="quality-value">60%</span>
+      <input type="range" id="quality-slider" min="10" max="100" value="80" step="5">
+      <span id="quality-value">80%</span>
     </div>
     <div class="toolbar-section">
       <label>FPS</label>
-      <input type="range" id="fps-slider" min="1" max="30" value="15" step="1">
-      <span id="fps-value">15</span>
-    </div>
-    <div class="toolbar-divider"></div>
-    <div class="toolbar-actions">
-      <button id="mode-toggle-btn" class="toolbar-btn">🖱️ Trackpad</button>
-      <button id="keyboard-btn" class="toolbar-btn">⌨️ Keyboard</button>
-      <button id="special-keys-btn" class="toolbar-btn">🔧 Keys</button>
-      <button id="right-click-mode-btn" class="toolbar-btn">🖱️ R-Click</button>
+      <input type="range" id="fps-slider" min="1" max="30" value="20" step="1">
+      <span id="fps-value">20</span>
     </div>
   </div>
 
@@ -72,6 +66,7 @@
 
   <!-- Special Keys Panel -->
   <div id="special-keys" class="special-keys hidden">
+    <button class="panel-close">✕</button>
     <div class="special-keys-grid">
       <button data-key="Escape" class="skey">Esc</button>
       <button data-key="Tab" class="skey">Tab</button>
@@ -100,6 +95,17 @@
       <button class="skey combo" data-combo="ctrl+s">Save</button>
       <button class="skey combo" data-combo="alt+Tab">Alt-Tab</button>
     </div>
+  </div>
+
+  <!-- Bottom Action Bar (always visible on mobile) -->
+  <div id="action-bar" class="action-bar">
+    <button id="btn-mode" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">Trackpad</span></button>
+    <button id="btn-keyboard" class="action-btn"><span class="action-icon">⌨️</span><span class="action-label">Keyboard</span></button>
+    <button id="btn-keys" class="action-btn"><span class="action-icon">🔧</span><span class="action-label">Keys</span></button>
+    <button id="btn-rclick" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">R-Click</span></button>
+    <button id="btn-settings" class="action-btn"><span class="action-icon">⚙️</span><span class="action-label">Settings</span></button>
+    <button id="btn-fullscreen" class="action-btn"><span class="action-icon">⛶</span><span class="action-label">Full</span></button>
+    <button id="btn-disconnect" class="action-btn disconnect-btn"><span class="action-icon">✕</span><span class="action-label">Exit</span></button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
