@@ -976,6 +976,8 @@
     document.body.classList.add('keyboard-active');
     const btn = $('#btn-keyboard');
     if (btn) btn.classList.add('active');
+    // Force layout reflow so browser registers the input as visible/focusable
+    void kbInput.offsetHeight;
     kbInput.focus();
     kbInput.click();
   }
