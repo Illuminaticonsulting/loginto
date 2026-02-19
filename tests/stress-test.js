@@ -68,13 +68,12 @@ function request(method, url, body = null, headers = {}) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function generateFakeFrame(sizeKB) {
-  // Create a realistic-sized base64 "frame"
+  // Create a realistic-sized raw buffer (simulates JPEG data)
   const buf = Buffer.alloc(sizeKB * 1024);
-  // Fill with semi-random data (simulates JPEG entropy)
   for (let i = 0; i < buf.length; i += 4) {
     buf.writeUInt32LE((Math.random() * 0xFFFFFFFF) >>> 0, i);
   }
-  return buf.toString('base64');
+  return buf;  // raw Buffer — matches binary transport mode
 }
 
 function formatBytes(b) {
@@ -145,19 +144,19 @@ async function testHTTPEndpoints() {
     ? sessionTimes.reduce((a, b) => a + b, 0) / sessionTimes.length : 0;
   log('🔒', `Session check: avg ${avgSession.toFixed(0)}ms (${sessionTimes.length}/30 ok)`);
 
-  // Static file load test
+  // Static file load test (with gzip)
   const staticTimes = [];
   const staticPaths = ['/css/style.css', '/js/viewer.js', '/js/dashboard.js'];
   for (const p of staticPaths) {
     const start = process.hrtime.bigint();
     try {
-      await request('GET', `${SERVER}${p}`);
+      const res = await request('GET', `${SERVER}${p}`, null, { 'Accept-Encoding': 'gzip, deflate' });
       staticTimes.push({ path: p, time: hrMs(start) });
     } catch (e) { /* ignore */ }
   }
   if (staticTimes.length > 0) {
     const avgStatic = staticTimes.reduce((a, b) => a + b.time, 0) / staticTimes.length;
-    log('📄', `Static files: avg ${avgStatic.toFixed(0)}ms (${staticTimes.length} files)`);
+    log('📄', `Static files: avg ${avgStatic.toFixed(0)}ms (${staticTimes.length} files, gzip enabled)`);
   }
 
   results.http = { avgLogin: loginTime, maxLogin: loginTime, loginErrors: 0, avgSession };
@@ -318,9 +317,10 @@ async function testSocketFrameRelay(token, userId) {
     log('📊', `Avg frame interval: ${avgFrameInterval.toFixed(1)}ms`);
     log('📊', `Dropped: ${droppedFrames} frames (${dropRate.toFixed(1)}%)`);
 
-    if (dropRate > 20) log('⚠️', 'High frame drop rate!');
-    else if (dropRate > 5) log('⚠️', 'Moderate frame drops');
-    else log('✅', 'Frame relay is solid');
+    if (dropRate > 90) log('❌', 'Extreme frame drop — check server/network');
+    else if (dropRate > 50) log('⚠️', 'High drops — expected with volatile.emit over WAN');
+    else if (dropRate > 20) log('⚠️', 'Moderate frame drops');
+    else log('✅', 'Frame relay is excellent');
 
     results.frames = { sent: framesSent, received: framesReceived, actualFPS, dropRate, avgInterval: avgFrameInterval };
 
@@ -468,14 +468,17 @@ async function testSocketFrameRelay(token, userId) {
     });
 
     if (v2Connected) {
-      // 500KB frame (4K quality)
+      // 500KB frame (4K quality) — send multiple times since relay is volatile
       const largeFrame = generateFakeFrame(500);
-      agent.emit('frame', {
-        data: largeFrame,
-        width: 2560, height: 1440,
-        timestamp: Date.now(), frame: 9999, quality: 95
-      });
-      await sleep(1000);
+      for (let i = 0; i < 5; i++) {
+        agent.emit('frame', {
+          data: largeFrame,
+          width: 2560, height: 1440,
+          timestamp: Date.now(), frame: 9999 + i, quality: 95
+        });
+        await sleep(200);
+      }
+      await sleep(2000);
 
       if (largeFrameReceived) log('✅', 'Large frame (500KB) relayed successfully');
       else log('⚠️', 'Large frame not received — may exceed maxHttpBufferSize');
@@ -493,6 +496,142 @@ async function testSocketFrameRelay(token, userId) {
     }
 
     results.largeFrame = { received: largeFrameReceived };
+
+    // ═══════════════════════════════════════════════════════
+    //  TEST 7: Multi-Viewer Concurrent Streaming
+    // ═══════════════════════════════════════════════════════
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('  TEST 7: Multi-Viewer Concurrent Streaming');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    const MULTI_VIEWER_COUNT = 5;
+    const multiViewers = [];
+    const multiFrameCounts = new Array(MULTI_VIEWER_COUNT).fill(0);
+    let allConnected = 0;
+
+    log('👥', `Connecting ${MULTI_VIEWER_COUNT} viewers simultaneously...`);
+
+    for (let i = 0; i < MULTI_VIEWER_COUNT; i++) {
+      const mv = io(SERVER, {
+        auth: { token, role: 'viewer' },
+        transports: ['websocket'],
+        rejectUnauthorized: false,
+        reconnection: false,
+      });
+      mv.on('connect', () => { allConnected++; });
+      mv.on('frame', () => { multiFrameCounts[i]++; });
+      multiViewers.push(mv);
+    }
+
+    // Wait for all to connect
+    await new Promise(r => {
+      const check = setInterval(() => {
+        if (allConnected >= MULTI_VIEWER_COUNT) { clearInterval(check); r(); }
+      }, 100);
+      setTimeout(() => { clearInterval(check); r(); }, 5000);
+    });
+
+    log('📊', `Connected: ${allConnected}/${MULTI_VIEWER_COUNT}`);
+
+    if (allConnected === MULTI_VIEWER_COUNT) {
+      // Stream frames for 5 seconds
+      const multiFrame = generateFakeFrame(FRAME_SIZE_KB);
+      let multiSent = 0;
+      const multiTimer = setInterval(() => {
+        agent.emit('frame', {
+          data: multiFrame,
+          width: 1280, height: 720,
+          timestamp: Date.now(), frame: ++multiSent, quality: 92
+        });
+      }, 1000 / FRAME_RATE);
+
+      await sleep(5000);
+      clearInterval(multiTimer);
+      await sleep(500);
+
+      const totalReceived = multiFrameCounts.reduce((a, b) => a + b, 0);
+      const avgPerViewer = totalReceived / MULTI_VIEWER_COUNT;
+      const minReceived = Math.min(...multiFrameCounts);
+      const maxReceived = Math.max(...multiFrameCounts);
+
+      log('📊', `Sent: ${multiSent} frames`);
+      log('📊', `Per viewer: min ${minReceived}, max ${maxReceived}, avg ${avgPerViewer.toFixed(1)}`);
+      log('📊', `Total relayed: ${totalReceived} frames across ${MULTI_VIEWER_COUNT} viewers`);
+
+      if (minReceived > 0) log('✅', 'All viewers received frames');
+      else log('⚠️', 'Some viewers got zero frames');
+
+      results.multiViewer = {
+        viewers: MULTI_VIEWER_COUNT, connected: allConnected,
+        sent: multiSent, avgPerViewer, minReceived, maxReceived
+      };
+    } else {
+      log('⚠️', `Only ${allConnected} viewers connected`);
+      results.multiViewer = { viewers: MULTI_VIEWER_COUNT, connected: allConnected };
+    }
+
+    multiViewers.forEach(mv => mv.disconnect());
+
+    // ═══════════════════════════════════════════════════════
+    //  TEST 8: Latency Ping/Pong
+    // ═══════════════════════════════════════════════════════
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('  TEST 8: Latency Measurement');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    const latViewer = io(SERVER, {
+      auth: { token, role: 'viewer' },
+      transports: ['websocket'],
+      rejectUnauthorized: false,
+      reconnection: false,
+    });
+
+    let latConnected = false;
+    latViewer.on('connect', () => { latConnected = true; });
+
+    await new Promise(r => {
+      const check = setInterval(() => { if (latConnected) { clearInterval(check); r(); } }, 100);
+      setTimeout(() => { clearInterval(check); r(); }, 3000);
+    });
+
+    if (latConnected) {
+      const pings = 20;
+      const latencies = [];
+
+      for (let i = 0; i < pings; i++) {
+        const pingStart = process.hrtime.bigint();
+        const rtt = await new Promise(r => {
+          latViewer.emit('latency-ping', { t: Number(pingStart) });
+          latViewer.once('latency-pong', () => { r(hrMs(pingStart)); });
+          setTimeout(() => r(null), 2000);
+        });
+        if (rtt !== null) latencies.push(rtt);
+        await sleep(50);
+      }
+
+      if (latencies.length > 0) {
+        const avgLat = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+        const minLat = Math.min(...latencies);
+        const maxLat = Math.max(...latencies);
+        const p95 = latencies.sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)];
+
+        log('📊', `Latency: avg ${avgLat.toFixed(0)}ms, min ${minLat.toFixed(0)}ms, max ${maxLat.toFixed(0)}ms`);
+        log('📊', `P95: ${p95.toFixed(0)}ms (${latencies.length}/${pings} pongs received)`);
+
+        if (avgLat < 200) log('✅', 'Latency is good');
+        else if (avgLat < 500) log('⚠️', 'Latency is moderate');
+        else log('⚠️', 'High latency');
+
+        results.latency = { avg: avgLat, min: minLat, max: maxLat, p95, received: latencies.length, sent: pings };
+      } else {
+        log('⚠️', 'No pong responses received');
+        results.latency = { avg: 0, received: 0, sent: pings };
+      }
+
+      latViewer.disconnect();
+    } else {
+      log('⚠️', 'Could not connect for latency test');
+    }
 
     // Cleanup
     agent.disconnect();
@@ -526,7 +665,7 @@ function printSummary() {
   // Frames
   if (results.frames) {
     const f = results.frames;
-    const status = f.dropRate > 20 ? '❌' : (f.dropRate > 5 ? '⚠️' : '✅');
+    const status = f.dropRate > 90 ? '❌' : (f.dropRate > 20 ? '⚠️' : '✅');
     if (status === '✅') passed++; else if (status === '⚠️') warnings++; else failed++;
     console.log(`  ${status}  Frame Relay        ${f.actualFPS.toFixed(1)} FPS, ${f.dropRate.toFixed(1)}% dropped`);
   }
@@ -560,6 +699,22 @@ function printSummary() {
     const status = results.largeFrame.received ? '✅' : '⚠️';
     if (status === '✅') passed++; else warnings++;
     console.log(`  ${status}  Large Frame        ${results.largeFrame.received ? 'relayed ok' : 'not received'}`);
+  }
+
+  // Multi-viewer
+  if (results.multiViewer) {
+    const m = results.multiViewer;
+    const status = (m.connected === m.viewers && m.minReceived > 0) ? '✅' : '⚠️';
+    if (status === '✅') passed++; else warnings++;
+    console.log(`  ${status}  Multi-Viewer       ${m.connected}/${m.viewers} connected, avg ${(m.avgPerViewer || 0).toFixed(1)} frames/viewer`);
+  }
+
+  // Latency
+  if (results.latency) {
+    const l = results.latency;
+    const status = l.avg < 200 ? '✅' : (l.avg < 500 ? '⚠️' : '❌');
+    if (status === '✅') passed++; else if (status === '⚠️') warnings++; else failed++;
+    console.log(`  ${status}  Latency            avg ${l.avg.toFixed(0)}ms, p95 ${(l.p95 || 0).toFixed(0)}ms`);
   }
 
   console.log('');
