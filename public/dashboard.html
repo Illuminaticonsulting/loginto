@@ -48,6 +48,13 @@
       <div id="state-online" class="machine-state" style="display:none">
         <p class="text-muted mb-16">Your desktop agent is running and ready.</p>
         <a href="/viewer.html" class="btn-primary btn-connect">Connect to Desktop</a>
+        <details class="advanced-toggle" style="margin-top: 20px;">
+          <summary class="text-muted text-sm">Re-install / update agent command</summary>
+          <div id="setup-command-online" class="code-block setup-oneliner" title="Click to copy" style="margin-top: 8px;">
+            Loading...
+          </div>
+          <p id="copy-feedback-online" class="text-sm text-success" style="display:none">✅ Copied to clipboard!</p>
+        </details>
       </div>
 
       <!-- Offline State -->

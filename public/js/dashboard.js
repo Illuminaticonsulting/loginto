@@ -26,7 +26,9 @@
   const stateOffline = document.getElementById('state-offline');
   const agentKeyBox = document.getElementById('agent-key-box');
   const setupCommand = document.getElementById('setup-command');
+  const setupCommandOnline = document.getElementById('setup-command-online');
   const copyFeedback = document.getElementById('copy-feedback');
+  const copyFeedbackOnline = document.getElementById('copy-feedback-online');
 
   // ─── Init UI ───────────────────────────────────────────
   userGreeting.textContent = displayName || userId;
@@ -50,6 +52,7 @@
         agentKeyBox.textContent = data.agentKey;
         const cmd = `curl -sL "${location.origin}/api/setup/${data.agentKey}" | bash`;
         setupCommand.textContent = cmd;
+        if (setupCommandOnline) setupCommandOnline.textContent = cmd;
       }
     }).catch(() => {
       agentKeyBox.textContent = 'Error loading key';
@@ -89,6 +92,21 @@
       });
     }
   });
+
+  // Copy online setup command on click
+  if (setupCommandOnline) {
+    setupCommandOnline.addEventListener('click', () => {
+      const text = setupCommandOnline.textContent;
+      if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
+        navigator.clipboard.writeText(text).then(() => {
+          if (copyFeedbackOnline) {
+            copyFeedbackOnline.style.display = 'block';
+            setTimeout(() => { copyFeedbackOnline.style.display = 'none'; }, 2000);
+          }
+        }).catch(() => {});
+      }
+    });
+  }
 
   // ─── Real-Time Status via Socket.IO ────────────────────
   const socket = io({
