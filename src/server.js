@@ -336,8 +336,7 @@ Write-Host "[OK] Agent directory: $agentDir" -ForegroundColor Green
     "screenshot-desktop": "^1.12.7",
     "sharp": "^0.33.2",
     "socket.io-client": "^4.7.4"
-  },
-  "optionalDependencies": { "robotjs": "^0.6.0" }
+  }
 }
 '@ | Set-Content -Path "package.json" -Encoding UTF8
 
@@ -356,11 +355,13 @@ Invoke-WebRequest -Uri "${serverURL}/agent-files/agent.js"  -OutFile "agent.js" 
 Invoke-WebRequest -Uri "${serverURL}/agent-files/capture.js" -OutFile "capture.js" -UseBasicParsing
 Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"   -OutFile "input.js"   -UseBasicParsing
 
-# Install dependencies (skip robotjs if it fails)
+# Install dependencies (install all except robotjs, then force sharp platform binaries)
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 $env:npm_config_optional = "false"
-& npm install --omit=optional --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
-Write-Host "[OK] Core dependencies installed" -ForegroundColor Green
+& npm install --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
+# Force-install sharp with platform binaries (npm sometimes skips them)
+& npm install --os=win32 --cpu=x64 sharp --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
+Write-Host "[OK] Dependencies installed" -ForegroundColor Green
 
 # Try robotjs (optional — usually fails without C++ build tools, that's OK)
 Write-Host "Trying robotjs (optional)..." -ForegroundColor Yellow
