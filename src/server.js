@@ -295,7 +295,7 @@ app.get('/api/setup-win/:agentKey', (req, res) => {
 # LogInTo Agent - Windows PowerShell Installer
 # Run this in PowerShell (as Administrator recommended)
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
@@ -358,12 +358,13 @@ Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"   -OutFile "input.js"
 
 # Install dependencies (skip robotjs if it fails)
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-npm install --no-optional --no-fund --no-audit 2>$null
+$env:npm_config_optional = "false"
+& npm install --omit=optional --no-fund --no-audit 2>&1 | Where-Object { $_ -notmatch "^npm warn" }
 Write-Host "[OK] Core dependencies installed" -ForegroundColor Green
 
-# Try robotjs (optional)
+# Try robotjs (optional — usually fails without C++ build tools, that's OK)
 Write-Host "Trying robotjs (optional)..." -ForegroundColor Yellow
-npm install robotjs 2>$null
+& npm install robotjs 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[i] robotjs skipped - using PowerShell fallback (works fine)" -ForegroundColor Yellow
 } else {
