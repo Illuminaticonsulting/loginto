@@ -1,0 +1,27 @@
+{
+  "name": "loginto",
+  "version": "1.0.0",
+  "description": "Personal remote desktop web app — control your laptop from your phone",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "setup": "node scripts/setup.js",
+    "tunnel": "node scripts/tunnel.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.1",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "uuid": "^9.0.0",
+    "robotjs": "^0.6.0",
+    "screenshot-desktop": "^1.15.0",
+    "sharp": "^0.33.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

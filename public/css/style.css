@@ -1,0 +1,517 @@
+/* ═══════════════════════════════════════════════════════════
+   LogInTo — Remote Desktop Web App Styles
+   Mobile-first, dark theme, clean modern UI
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --bg: #0a0a0f;
+  --bg-surface: #14141f;
+  --bg-elevated: #1e1e2e;
+  --bg-hover: #252538;
+  --text: #e8e8f0;
+  --text-muted: #888899;
+  --text-dim: #555566;
+  --accent: #6c5ce7;
+  --accent-hover: #7c6ef7;
+  --accent-glow: rgba(108, 92, 231, 0.3);
+  --success: #00d68f;
+  --error: #ff4757;
+  --warning: #ffa502;
+  --border: #2a2a3a;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* ─── Screens ───────────────────────────────────────────── */
+
+.screen {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+
+.screen.active {
+  display: flex;
+}
+
+/* ─── Login Screen ──────────────────────────────────────── */
+
+#login-screen {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(108, 92, 231, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(0, 214, 143, 0.05) 0%, transparent 50%);
+}
+
+.login-container {
+  width: 100%;
+  max-width: 380px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.logo {
+  margin-bottom: 40px;
+}
+
+.logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  color: white;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+
+.logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.logo .subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 16px; /* Prevents iOS zoom */
+  font-family: inherit;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-group input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.input-group input::placeholder {
+  color: var(--text-dim);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.login-footer {
+  margin-top: 32px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Desktop Screen ────────────────────────────────────── */
+
+#desktop-screen {
+  flex-direction: column;
+  background: #000;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  flex-shrink: 0;
+  min-height: 36px;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-dot.error {
+  background: var(--error);
+  animation: none;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.icon-btn:active {
+  background: var(--bg-hover);
+}
+
+.icon-btn.disconnect {
+  color: var(--error);
+  font-weight: bold;
+}
+
+/* Canvas Container */
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+#remote-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  touch-action: none;
+}
+
+.cursor-indicator {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: none;
+  z-index: 10;
+  transition: left 0.05s, top 0.05s;
+}
+
+.cursor-indicator.visible {
+  display: block;
+}
+
+.cursor-indicator.clicking {
+  background: var(--accent-glow);
+  transform: translate(-50%, -50%) scale(1.5);
+  transition: transform 0.1s;
+}
+
+/* ─── Toolbar ───────────────────────────────────────────── */
+
+.toolbar {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  z-index: 200;
+  box-shadow: var(--shadow);
+  min-width: 260px;
+  max-width: 90vw;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.toolbar.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(10px);
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.toolbar-section label {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 48px;
+}
+
+.toolbar-section input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.toolbar-section span {
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 36px;
+  text-align: right;
+}
+
+.toolbar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.toolbar-btn:active {
+  background: var(--bg-hover);
+}
+
+.toolbar-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* ─── Special Keys Panel ────────────────────────────────── */
+
+.special-keys {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  padding: 12px;
+  z-index: 200;
+  transition: transform 0.25s ease;
+}
+
+.special-keys.hidden {
+  transform: translateY(100%);
+}
+
+.special-keys-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.modifier-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.shortcut-combos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.skey {
+  padding: 10px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s, transform 0.1s;
+  text-align: center;
+}
+
+.skey:active {
+  background: var(--accent);
+  transform: scale(0.95);
+}
+
+.skey.mod {
+  background: var(--bg-hover);
+}
+
+.skey.mod.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.skey.combo {
+  background: var(--bg-hover);
+  font-size: 11px;
+}
+
+/* ─── Hidden Keyboard Input ─────────────────────────────── */
+
+.keyboard-input {
+  position: fixed;
+  top: -200px;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  font-size: 16px; /* Prevent iOS zoom */
+}
+
+/* ─── Responsive ────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 24px 20px;
+  }
+
+  .special-keys-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .shortcut-combos {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .special-keys {
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 600px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .special-keys.hidden {
+    transform: translateX(-50%) translateY(100%);
+  }
+}
+
+/* ─── Fullscreen ────────────────────────────────────────── */
+
+body.fullscreen .status-bar {
+  opacity: 0;
+  transition: opacity 0.3s;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+}
+
+body.fullscreen .status-bar:hover,
+body.fullscreen .status-bar:active {
+  opacity: 1;
+}
+
+body.fullscreen #canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
