@@ -91,6 +91,8 @@
   const kbInput   = $('#keyboard-input');
   const displaysPanel = $('#displays-panel');
   const displaysList  = $('#displays-list');
+  const clipboardPanel = $('#clipboard-panel');
+  const clipboardText  = $('#clipboard-text');
 
   // Frame double-buffer
   const img = new Image();
@@ -155,6 +157,15 @@
       renderDisplays(displays);
     });
 
+    // Clipboard: receive remote clipboard content
+    S.socket.on('clipboard-content', data => {
+      if (clipboardText) clipboardText.value = data.text || '';
+      // Also copy to local clipboard if possible
+      if (navigator.clipboard && data.text) {
+        navigator.clipboard.writeText(data.text).catch(() => {});
+      }
+    });
+
     setInterval(() => {
       S.currentFPS = S.fpsCounter; S.fpsCounter = 0;
       fpsEl.textContent = S.currentFPS + ' FPS';
@@ -177,6 +188,13 @@
     S.fpsCounter++;
 
     if (S.fpsCounter % 10 === 0) latEl.textContent = Math.round(S.avgInterval) + 'ms';
+
+    // Update quality slider to show adaptive quality from agent
+    if (data.quality && Math.abs(data.quality - S.currentQuality) > 1) {
+      S.currentQuality = data.quality;
+      qualSlider.value = data.quality;
+      qualVal.textContent = data.quality + '%';
+    }
 
     if (framePending) return;        // drop frame if previous still decoding
     framePending = true;
@@ -354,9 +372,10 @@
     closeAllPanels();
     S.panelOpen = name;
     backdrop.classList.add('visible');
-    if (name === 'toolbar')  toolbar.classList.remove('hidden');
-    if (name === 'keys')     keysPanel.classList.remove('hidden');
-    if (name === 'displays') displaysPanel.classList.remove('hidden');
+    if (name === 'toolbar')   toolbar.classList.remove('hidden');
+    if (name === 'keys')      keysPanel.classList.remove('hidden');
+    if (name === 'displays')  displaysPanel.classList.remove('hidden');
+    if (name === 'clipboard') clipboardPanel.classList.remove('hidden');
   }
 
   function closeAllPanels() {
@@ -365,6 +384,7 @@
     toolbar.classList.add('hidden');
     keysPanel.classList.add('hidden');
     displaysPanel.classList.add('hidden');
+    clipboardPanel.classList.add('hidden');
   }
 
   backdrop.addEventListener('click', closeAllPanels);
@@ -551,9 +571,36 @@
     emitMove(); updateCursor();
   });
 
+  // ── Desktop drag state ──
+  let desktopDragging = false;
+  let desktopDragMoved = false;
+
   canvas.addEventListener('mousedown', e => {
     if (e.button === 0) {
-      S.socket?.emit('mouse-click', { ...clientToRemote(e.clientX, e.clientY), button: 'left' });
+      desktopDragging = true;
+      desktopDragMoved = false;
+      const c = clientToRemote(e.clientX, e.clientY);
+      S.cursorX = c.x; S.cursorY = c.y;
+      S.socket?.emit('mouse-down', { x: c.x, y: c.y, button: 'left' });
+    }
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!desktopDragging) return;
+    desktopDragMoved = true;
+    const c = clientToRemote(e.clientX, e.clientY);
+    S.cursorX = c.x; S.cursorY = c.y;
+    emitMove(); updateCursor();
+  });
+
+  document.addEventListener('mouseup', e => {
+    if (!desktopDragging) return;
+    desktopDragging = false;
+    const c = clientToRemote(e.clientX, e.clientY);
+    S.socket?.emit('mouse-up', { x: c.x, y: c.y, button: 'left' });
+    if (!desktopDragMoved) {
+      // It was a click, not a drag
+      S.socket?.emit('mouse-click', { x: c.x, y: c.y, button: 'left' });
       flashCursorClick();
     }
   });
@@ -696,6 +743,24 @@
     S.rightClickMode = !S.rightClickMode;
     const b = $('#btn-rclick');
     if (b) b.classList.toggle('active', S.rightClickMode);
+  });
+
+  on('btn-clipboard', () => {
+    if (S.panelOpen === 'clipboard') { closeAllPanels(); return; }
+    openPanel('clipboard');
+  });
+
+  on('clipboard-send', () => {
+    const text = clipboardText?.value;
+    if (text) {
+      S.socket?.emit('clipboard-write', { text });
+      clipboardText.value = '';
+      closeAllPanels();
+    }
+  });
+
+  on('clipboard-fetch', () => {
+    S.socket?.emit('clipboard-read');
   });
 
   on('btn-fullscreen', () => {

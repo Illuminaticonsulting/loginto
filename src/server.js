@@ -327,6 +327,15 @@ io.on('connection', (socket) => {
       });
     });
 
+    // Relay clipboard-content from agent → viewer
+    socket.on('clipboard-content', (data) => {
+      io.sockets.sockets.forEach(s => {
+        if (s.userId === socket.userId && s.role === 'viewer') {
+          s.emit('clipboard-content', data);
+        }
+      });
+    });
+
     socket.on('disconnect', () => {
       console.log(`🖥️  Agent offline: ${socket.displayName || socket.userId}`);
       agents.delete(socket.userId);
@@ -386,6 +395,16 @@ io.on('connection', (socket) => {
     socket.on('switch-screen', (data) => {
       const a = agents.get(socket.userId);
       if (a?.connected) a.socket.emit('switch-screen', data);
+    });
+
+    // Clipboard sync
+    socket.on('clipboard-write', (data) => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('clipboard-write', data);
+    });
+    socket.on('clipboard-read', () => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('clipboard-read');
     });
 
     socket.on('disconnect', () => {

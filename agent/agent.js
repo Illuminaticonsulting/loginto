@@ -117,7 +117,15 @@ function connect() {
     console.log('   📱 Viewer connected — streaming started');
     capture.startStreaming((frameData) => {
       if (socket.connected) {
-        socket.volatile.emit('frame', frameData);
+        // Send frame buffer as binary + metadata separately for efficiency
+        socket.volatile.emit('frame', {
+          data: frameData.buf.toString('base64'),
+          width: frameData.width,
+          height: frameData.height,
+          timestamp: frameData.timestamp,
+          frame: frameData.frame,
+          quality: capture.quality  // send current adaptive quality so viewer knows
+        });
       }
     });
   });
@@ -188,6 +196,18 @@ function connect() {
 
   socket.on('key-type', (data) => {
     input.typeText(data.text);
+  });
+
+  // ─── Clipboard Sync ─────────────────────────────────────
+  socket.on('clipboard-write', (data) => {
+    // Viewer sent text → write to desktop clipboard
+    input.setClipboard(data.text);
+  });
+
+  socket.on('clipboard-read', () => {
+    // Viewer requests clipboard → read and send back
+    const text = input.getClipboard();
+    if (text) socket.emit('clipboard-content', { text });
   });
 }
 

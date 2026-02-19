@@ -13,6 +13,7 @@
 
 const screenshot = require('screenshot-desktop');
 const sharp = require('sharp');
+const crypto = require('crypto');
 
 class ScreenCapture {
   constructor(options = {}) {
@@ -24,8 +25,19 @@ class ScreenCapture {
     this.screenWidth = 1920;
     this.screenHeight = 1080;
     this.lastFrame = null;
+    this.lastFrameHash = null;
     this.frameCount = 0;
+    this.skippedFrames = 0;
     this.capturing = false;
+
+    // Adaptive quality
+    this.adaptiveEnabled = true;
+    this.targetFPS = this.fps;
+    this.actualFPS = 0;
+    this._fpsCounter = 0;
+    this._lastFPSCheck = Date.now();
+    this.minQuality = 40;
+    this.maxQuality = 95;
 
     // Multi-monitor
     this.displays = [];        // [{ id, name }, ...]
@@ -162,6 +174,9 @@ class ScreenCapture {
   _startInterval(callback) {
     const intervalMs = Math.round(1000 / this.fps);
 
+    // Adaptive quality check every 2 seconds
+    this._adaptiveInterval = setInterval(() => this._adaptiveCheck(), 2000);
+
     this.interval = setInterval(async () => {
       if (!this.streaming || this.capturing) return;
       this.capturing = true;
@@ -169,9 +184,20 @@ class ScreenCapture {
       try {
         const frame = await this._captureFrame();
         if (frame && this.streaming) {
+          // Idle frame detection: hash & skip if identical
+          const hash = crypto.createHash('md5').update(frame).digest('hex');
+          if (hash === this.lastFrameHash) {
+            this.skippedFrames++;
+            this.capturing = false;
+            return;
+          }
+          this.lastFrameHash = hash;
+
           this.frameCount++;
+          this._fpsCounter++;
+          // Send raw buffer (binary) instead of base64 — 33% less bandwidth
           callback({
-            data: frame.toString('base64'),
+            buf: frame,
             width: Math.round(this.screenWidth * this.scale),
             height: Math.round(this.screenHeight * this.scale),
             timestamp: Date.now(),
@@ -186,6 +212,25 @@ class ScreenCapture {
         this.capturing = false;
       }
     }, intervalMs);
+  }
+
+  _adaptiveCheck() {
+    if (!this.adaptiveEnabled) return;
+    const now = Date.now();
+    const elapsed = (now - this._lastFPSCheck) / 1000;
+    this.actualFPS = Math.round(this._fpsCounter / elapsed);
+    this._fpsCounter = 0;
+    this._lastFPSCheck = now;
+
+    // If actual FPS < 70% of target, reduce quality
+    if (this.actualFPS < this.targetFPS * 0.7 && this.quality > this.minQuality) {
+      this.quality = Math.max(this.minQuality, this.quality - 5);
+      console.log(`📉 Adaptive: quality → ${this.quality} (actual ${this.actualFPS}/${this.targetFPS} FPS)`);
+    }
+    // If hitting target comfortably, slowly increase
+    else if (this.actualFPS >= this.targetFPS * 0.95 && this.quality < this.maxQuality) {
+      this.quality = Math.min(this.maxQuality, this.quality + 2);
+    }
   }
 
   async _captureFrame() {
@@ -220,7 +265,11 @@ class ScreenCapture {
       clearInterval(this.interval);
       this.interval = null;
     }
-    console.log(`⏹️  Streaming stopped (${this.frameCount} frames sent)`);
+    if (this._adaptiveInterval) {
+      clearInterval(this._adaptiveInterval);
+      this._adaptiveInterval = null;
+    }
+    console.log(`⏹️  Streaming stopped (${this.frameCount} frames sent, ${this.skippedFrames} idle skipped)`);
   }
 }
 

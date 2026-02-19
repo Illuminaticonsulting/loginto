@@ -178,6 +178,11 @@ class InputHandler {
           'Alt': 'alt',
           'Shift': 'shift',
           'CapsLock': 'caps_lock',
+          'PrintScreen': 'printscreen',
+          'Insert': 'insert',
+          'F1': 'f1', 'F2': 'f2', 'F3': 'f3', 'F4': 'f4',
+          'F5': 'f5', 'F6': 'f6', 'F7': 'f7', 'F8': 'f8',
+          'F9': 'f9', 'F10': 'f10', 'F11': 'f11', 'F12': 'f12',
         };
 
         const robotKey = keyMap[key] || key.toLowerCase();
@@ -300,6 +305,35 @@ class InputHandler {
     try {
       if (this.platform === 'linux') {
         execSync(`xdotool type --clearmodifiers "${text.replace(/"/g, '\\"')}"`, { timeout: 2000 });
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // ─── Clipboard ──────────────────────────────────────────
+
+  getClipboard() {
+    const { execSync } = require('child_process');
+    try {
+      if (process.platform === 'darwin') {
+        return execSync('pbpaste', { timeout: 1000, encoding: 'utf8' });
+      } else if (process.platform === 'linux') {
+        return execSync('xclip -selection clipboard -o', { timeout: 1000, encoding: 'utf8' });
+      } else if (process.platform === 'win32') {
+        return execSync('powershell -command "Get-Clipboard"', { timeout: 1000, encoding: 'utf8' }).trim();
+      }
+    } catch (e) { return ''; }
+    return '';
+  }
+
+  setClipboard(text) {
+    const { execSync } = require('child_process');
+    try {
+      if (process.platform === 'darwin') {
+        execSync('pbcopy', { input: text, timeout: 1000 });
+      } else if (process.platform === 'linux') {
+        execSync('xclip -selection clipboard', { input: text, timeout: 1000 });
+      } else if (process.platform === 'win32') {
+        execSync('clip', { input: text, timeout: 1000 });
       }
     } catch (e) { /* ignore */ }
   }
