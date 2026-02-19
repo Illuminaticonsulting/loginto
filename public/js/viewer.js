@@ -189,11 +189,11 @@
       canvas.width = info.scaledWidth;
       canvas.height = info.scaledHeight;
       S.cursorX = (info.inputWidth || info.width) / 2;
-      // Show cursor immediately at center
-      setTimeout(() => updateCursor(), 100);
       S.cursorY = (info.inputHeight || info.height) / 2;
       S.zoom = 1;
       computeFit();
+      // Show cursor at center after layout settles
+      setTimeout(() => updateCursor(), 50);
       S.socket.emit('update-quality', { quality: S.currentQuality });
       S.socket.emit('update-fps', { fps: S.currentFPSSetting });
     });
@@ -468,12 +468,13 @@
     const x = S.cursorX / iw * canvas.width  * ts + S.panX;
     const y = S.cursorY / ih * canvas.height * ts + S.panY;
     cursor.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
-    showCursor();
+    // Always force display — cursor must be visible
+    cursor.style.display = 'block';
     cursor.classList.toggle('dragging', S.isDragging);
   }
 
   function showCursor() {
-    if (cursor && cursor.style.display !== 'block') cursor.style.display = 'block';
+    if (cursor) cursor.style.display = 'block';
   }
 
   function flashCursorClick() {
