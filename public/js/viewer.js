@@ -749,8 +749,6 @@
           if (evt === 'mouse-click') pos.button = 'left';
           S.socket?.emit(evt, pos);
           S.lastTapTime = ts;
-          // Auto-pop keyboard on single tap
-          if (!keyboardOpen) openKeyboard();
         }
       }
     }
@@ -970,7 +968,7 @@
 
   // ───────────────────────────────────────────────────────
   //  KEYBOARD MANAGEMENT
-  //  Auto-pop keyboard on single tap
+  //  Toggle via More menu → Keyboard
   // ───────────────────────────────────────────────────────
 
   function openKeyboard() {
@@ -1005,6 +1003,8 @@
   on('btn-more', () => {
     if (S.panelOpen === 'more') closeAllPanels(); else openPanel('more');
   });
+
+  on('btn-keyboard', () => { closeAllPanels(); toggleKeyboard(); });
 
   on('btn-screens', () => {
     closeAllPanels();
