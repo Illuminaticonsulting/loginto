@@ -598,6 +598,28 @@ code {
   color: var(--text-dim);
 }
 
+.keyboard-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 18px;
+  padding: 2px 6px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.keyboard-toggle:hover,
+.keyboard-toggle:active {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.keyboard-active .keyboard-toggle {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .icon-btn {
   background: none;
   border: none;

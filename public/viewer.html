@@ -36,6 +36,7 @@
       <span id="mode-badge" class="mode-badge">Trackpad</span>
     </div>
     <div class="status-right">
+      <button id="btn-keyboard-top" class="keyboard-toggle" title="Toggle Keyboard">⌨️</button>
       <span id="fps-display">-- FPS</span>
       <span id="latency-display">-- ms</span>
     </div>
@@ -86,65 +87,6 @@
     </div>
   </div>
 
-  <!-- Special Keys Panel -->
-  <div id="special-keys" class="special-keys hidden">
-    <button class="panel-close">✕</button>
-    <div class="special-keys-section-label">Function Keys</div>
-    <div class="special-keys-grid fkeys">
-      <button data-key="F1" class="skey">F1</button>
-      <button data-key="F2" class="skey">F2</button>
-      <button data-key="F3" class="skey">F3</button>
-      <button data-key="F4" class="skey">F4</button>
-      <button data-key="F5" class="skey">F5</button>
-      <button data-key="F6" class="skey">F6</button>
-      <button data-key="F7" class="skey">F7</button>
-      <button data-key="F8" class="skey">F8</button>
-      <button data-key="F9" class="skey">F9</button>
-      <button data-key="F10" class="skey">F10</button>
-      <button data-key="F11" class="skey">F11</button>
-      <button data-key="F12" class="skey">F12</button>
-    </div>
-    <div class="special-keys-section-label">Navigation</div>
-    <div class="special-keys-grid">
-      <button data-key="Escape" class="skey">Esc</button>
-      <button data-key="Tab" class="skey">Tab</button>
-      <button data-key="Delete" class="skey">Del</button>
-      <button data-key="Backspace" class="skey">Bksp</button>
-      <button data-key="Home" class="skey">Home</button>
-      <button data-key="End" class="skey">End</button>
-      <button data-key="PageUp" class="skey">PgUp</button>
-      <button data-key="PageDown" class="skey">PgDn</button>
-      <button data-key="ArrowUp" class="skey">↑</button>
-      <button data-key="ArrowDown" class="skey">↓</button>
-      <button data-key="ArrowLeft" class="skey">←</button>
-      <button data-key="ArrowRight" class="skey">→</button>
-      <button data-key="Enter" class="skey">Enter</button>
-      <button data-key="Insert" class="skey">Ins</button>
-      <button data-key="PrintScreen" class="skey">PrtSc</button>
-      <button data-key="Space" class="skey">Space</button>
-    </div>
-    <div class="modifier-keys">
-      <button class="skey mod" data-mod="ctrl">Ctrl</button>
-      <button class="skey mod" data-mod="alt">Alt</button>
-      <button class="skey mod" data-mod="shift">Shift</button>
-      <button class="skey mod" data-mod="meta">Cmd/Win</button>
-    </div>
-    <div class="shortcut-combos">
-      <button class="skey combo" data-combo="ctrl+c">Copy</button>
-      <button class="skey combo" data-combo="ctrl+v">Paste</button>
-      <button class="skey combo" data-combo="ctrl+x">Cut</button>
-      <button class="skey combo" data-combo="ctrl+a">Sel All</button>
-      <button class="skey combo" data-combo="ctrl+z">Undo</button>
-      <button class="skey combo" data-combo="ctrl+shift+z">Redo</button>
-      <button class="skey combo" data-combo="ctrl+s">Save</button>
-      <button class="skey combo" data-combo="ctrl+f">Find</button>
-      <button class="skey combo" data-combo="alt+Tab">Alt-Tab</button>
-      <button class="skey combo" data-combo="ctrl+w">Close Tab</button>
-      <button class="skey combo" data-combo="ctrl+t">New Tab</button>
-      <button class="skey combo" data-combo="alt+F4">Alt-F4</button>
-    </div>
-  </div>
-
   <!-- Bottom Action Bar -->
   <div id="action-bar" class="action-bar">
     <button id="btn-mode" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">Trackpad</span></button>
@@ -156,8 +98,6 @@
   <div id="more-menu" class="more-menu hidden">
     <button class="panel-close">✕</button>
     <div class="more-menu-grid">
-      <button id="btn-keyboard" class="more-btn"><span class="more-icon">⌨️</span><span>Keyboard</span></button>
-      <button id="btn-keys" class="more-btn"><span class="more-icon">⌥</span><span>Special Keys</span></button>
       <button id="btn-screens" class="more-btn"><span class="more-icon">🖥️</span><span>Screens</span></button>
       <button id="btn-clipboard" class="more-btn"><span class="more-icon">📋</span><span>Clipboard</span></button>
       <button id="btn-screenshot" class="more-btn"><span class="more-icon">📷</span><span>Screenshot</span></button>

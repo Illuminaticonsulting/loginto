@@ -87,7 +87,7 @@
   const modeBdg  = $('#mode-badge');
   const backdrop = $('#panel-backdrop');
   const toolbar  = $('#toolbar');
-  const keysPanel = $('#special-keys');
+  const keysPanel = null;
   const qualSlider = $('#quality-slider');
   const qualVal   = $('#quality-value');
   const fpsSlider = $('#fps-slider');
@@ -560,7 +560,6 @@
     S.panelOpen = name;
     backdrop.classList.add('visible');
     if (name === 'toolbar')   toolbar.classList.remove('hidden');
-    if (name === 'keys')      keysPanel.classList.remove('hidden');
     if (name === 'displays')  displaysPanel.classList.remove('hidden');
     if (name === 'clipboard') clipboardPanel.classList.remove('hidden');
     if (name === 'more')      { if (moreMenu) moreMenu.classList.remove('hidden'); }
@@ -570,7 +569,6 @@
     S.panelOpen = null;
     backdrop.classList.remove('visible');
     toolbar.classList.add('hidden');
-    keysPanel.classList.add('hidden');
     displaysPanel.classList.add('hidden');
     clipboardPanel.classList.add('hidden');
     if (moreMenu) moreMenu.classList.add('hidden');
@@ -892,12 +890,7 @@
   kbInput.addEventListener('input', () => {
     const t = kbInput.value;
     if (t) {
-      if (S.activeModifiers.size > 0) {
-        S.socket?.emit('key-press', { key: t, modifiers: [...S.activeModifiers] });
-        clearMods();
-      } else {
-        S.socket?.emit('key-type', { text: t });
-      }
+      S.socket?.emit('key-type', { text: t });
       kbInput.value = '';
     }
   });
@@ -912,39 +905,9 @@
       if (e.altKey) m.push('alt');
       if (e.shiftKey) m.push('shift');
       if (e.metaKey) m.push('meta');
-      S.socket?.emit('key-press', { key: e.key, modifiers: [...m, ...S.activeModifiers] });
-      if (S.activeModifiers.size > 0) clearMods();
+      S.socket?.emit('key-press', { key: e.key, modifiers: m });
     }
   });
-
-  // Special keys panel
-  $$('.skey[data-key]').forEach(b => b.addEventListener('click', () => {
-    S.socket?.emit('key-press', { key: b.dataset.key, modifiers: [...S.activeModifiers] });
-    if (S.activeModifiers.size > 0) clearMods();
-    b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 150);
-  }));
-
-  $$('.skey.mod').forEach(b => b.addEventListener('click', () => {
-    const m = b.dataset.mod;
-    if (S.activeModifiers.has(m)) { S.activeModifiers.delete(m); b.classList.remove('active'); }
-    else { S.activeModifiers.add(m); b.classList.add('active'); }
-  }));
-
-  $$('.skey.combo').forEach(b => b.addEventListener('click', () => {
-    const parts = b.dataset.combo.split('+');
-    const key = parts.pop();
-    const mods = [...parts];
-    if (/Mac|iPhone|iPad/.test(navigator.userAgent)) {
-      const i = mods.indexOf('ctrl'); if (i !== -1) mods[i] = 'meta';
-    }
-    S.socket?.emit('key-press', { key, modifiers: mods });
-    b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 150);
-  }));
-
-  function clearMods() {
-    S.activeModifiers.clear();
-    $$('.skey.mod').forEach(b => b.classList.remove('active'));
-  }
 
   // ───────────────────────────────────────────────────────
   //  ACTION BAR
@@ -1004,16 +967,14 @@
     if (S.panelOpen === 'more') closeAllPanels(); else openPanel('more');
   });
 
-  on('btn-keyboard', () => { closeAllPanels(); toggleKeyboard(); });
+  // Keyboard toggle in status bar
+  const kbTopBtn = $('#btn-keyboard-top');
+  if (kbTopBtn) kbTopBtn.addEventListener('click', () => { closeAllPanels(); toggleKeyboard(); });
 
   on('btn-screens', () => {
     closeAllPanels();
     S.socket?.emit('list-screens');
     openPanel('displays');
-  });
-
-  on('btn-keys', () => {
-    if (S.panelOpen === 'keys') closeAllPanels(); else openPanel('keys');
   });
 
   on('btn-settings', () => {
