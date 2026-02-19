@@ -104,6 +104,49 @@ On macOS, you need to grant:
 - Sessions expire after 24 hours
 - Only 1 viewer at a time
 
+## Deploy to DigitalOcean (Your Own Subdomain)
+
+Want a permanent URL like `remote.yourdomain.com`? Deploy to your DigitalOcean droplet:
+
+### Step 1: Add a DNS subdomain
+
+In your DigitalOcean dashboard (or wherever your DNS is managed):
+1. Go to **Networking** → **Domains** → your domain
+2. Add an **A record**:
+   - Hostname: `remote` (or whatever subdomain you want)
+   - Points to: your droplet's IP address
+   - TTL: 3600
+
+### Step 2: Deploy to your droplet
+
+SSH into your droplet and run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Illuminaticonsulting/loginto/main/scripts/deploy-digitalocean.sh | bash -s -- remote.yourdomain.com
+```
+
+This automatically:
+- Installs Node.js, Nginx
+- Clones the repo and installs dependencies
+- Sets up Nginx reverse proxy with WebSocket support
+- Gets a free SSL certificate from Let's Encrypt
+- Creates a systemd service (auto-restarts)
+
+### Step 3: Open on your phone
+
+Go to `https://remote.yourdomain.com` and log in.
+
+### Manage the service
+
+```bash
+systemctl status loginto      # Check if running
+systemctl restart loginto     # Restart
+journalctl -u loginto -f      # View live logs
+nano /opt/loginto/.env        # Change password/settings
+```
+
+---
+
 ## Troubleshooting
 
 **"Screen capture error"**
