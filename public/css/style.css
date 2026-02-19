@@ -854,12 +854,31 @@ code {
 
 .keyboard-input {
   position: fixed;
-  top: -200px;
-  left: 0;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 1px;
   height: 1px;
   opacity: 0;
   font-size: 16px;
+  pointer-events: none;
+}
+
+/* When keyboard is active, show a subtle bar so user knows it's capturing */
+.keyboard-active .keyboard-input {
+  width: calc(100% - 32px);
+  max-width: 400px;
+  height: 36px;
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  font-family: inherit;
+  outline: none;
+  z-index: 200;
 }
 
 /* ─── Panel Backdrop ────────────────────────────────────── */
@@ -898,21 +917,22 @@ code {
   color: var(--text);
 }
 
-/* ─── Bottom Action Bar ─────────────────────────────────── */
+/* ─── Bottom Action Bar (5 items) ────────────────────────── */
 
 .action-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 52px;
+  height: 56px;
   display: flex;
   align-items: stretch;
-  background: var(--bg-elevated);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border);
   z-index: 100;
-  padding: 0 4px;
-  gap: 2px;
+  padding: 0 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  gap: 0;
 }
 
 .action-btn {
@@ -921,20 +941,21 @@ code {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 2px;
-  border-radius: 8px;
+  padding: 6px 4px;
+  border-radius: 0;
   font-family: inherit;
   min-width: 0;
-  transition: background 0.12s, color 0.12s;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .action-btn:active {
-  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .action-btn.active {
@@ -942,26 +963,80 @@ code {
 }
 
 .action-icon {
-  font-size: 16px;
+  font-size: 20px;
   line-height: 1;
 }
 
 .action-label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.disconnect-btn {
-  color: var(--error);
+/* ─── More Menu (slide-up panel) ─────────────────────────── */
+
+.more-menu {
+  position: fixed;
+  bottom: 56px;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  z-index: 200;
+  padding: 16px 16px calc(8px + env(safe-area-inset-bottom, 0));
+  transform: translateY(0);
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
-.disconnect-btn:active {
+.more-menu.hidden {
+  transform: translateY(100%);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.more-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.more-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.more-btn:active {
+  background: var(--bg-surface);
+}
+
+.more-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.more-btn.disconnect-btn {
   color: var(--error);
-  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.more-btn.disconnect-btn:active {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 /* ─── Viewer Layout Adjustments ─────────────────────────── */
@@ -976,15 +1051,15 @@ code {
 
 .page-viewer #canvas-container {
   flex: 1;
-  margin-bottom: 52px; /* action bar height */
+  margin-bottom: 56px; /* action bar height */
 }
 
 .page-viewer .special-keys {
-  bottom: 52px; /* above action bar */
+  bottom: 56px; /* above action bar */
 }
 
 .page-viewer .toolbar {
-  bottom: 64px; /* above action bar */
+  bottom: 68px; /* above action bar */
 }
 
 /* ─── Displays Panel ────────────────────────────────────── */
@@ -1218,12 +1293,24 @@ code {
   }
 
   .action-bar {
-    max-width: 480px;
+    max-width: 360px;
     left: 50%;
     transform: translateX(-50%);
     border-radius: var(--radius) var(--radius) 0 0;
     border-left: 1px solid var(--border);
     border-right: 1px solid var(--border);
+  }
+
+  .more-menu {
+    max-width: 400px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .more-menu.hidden {
+    transform: translateX(-50%) translateY(100%);
   }
 }
 
@@ -1249,7 +1336,7 @@ body.fullscreen #canvas-container {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 52px;
+  bottom: 56px;
 }
 
 body.fullscreen .action-bar {

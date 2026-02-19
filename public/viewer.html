@@ -145,18 +145,26 @@
     </div>
   </div>
 
-  <!-- Bottom Action Bar (always visible on mobile) -->
+  <!-- Bottom Action Bar -->
   <div id="action-bar" class="action-bar">
-    <button id="btn-screens" class="action-btn"><span class="action-icon">🖥️</span><span class="action-label">Screens</span></button>
-    <button id="btn-mode" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">Trackpad</span></button>
     <button id="btn-keyboard" class="action-btn"><span class="action-icon">⌨️</span><span class="action-label">Keyboard</span></button>
-    <button id="btn-keys" class="action-btn"><span class="action-icon">🔧</span><span class="action-label">Keys</span></button>
-    <button id="btn-rclick" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">R-Click</span></button>
-    <button id="btn-clipboard" class="action-btn"><span class="action-icon">📋</span><span class="action-label">Clip</span></button>
-    <button id="btn-screenshot" class="action-btn"><span class="action-icon">📷</span><span class="action-label">Snap</span></button>
-    <button id="btn-settings" class="action-btn"><span class="action-icon">⚙️</span><span class="action-label">Settings</span></button>
-    <button id="btn-fullscreen" class="action-btn"><span class="action-icon">⛶</span><span class="action-label">Full</span></button>
-    <button id="btn-disconnect" class="action-btn disconnect-btn"><span class="action-icon">✕</span><span class="action-label">Exit</span></button>
+    <button id="btn-mode" class="action-btn"><span class="action-icon">🖱️</span><span class="action-label">Trackpad</span></button>
+    <button id="btn-rclick" class="action-btn"><span class="action-icon">👆</span><span class="action-label">R-Click</span></button>
+    <button id="btn-keys" class="action-btn"><span class="action-icon">⌥</span><span class="action-label">Keys</span></button>
+    <button id="btn-more" class="action-btn"><span class="action-icon">•••</span><span class="action-label">More</span></button>
+  </div>
+
+  <!-- More Menu (slides up from bottom) -->
+  <div id="more-menu" class="more-menu hidden">
+    <button class="panel-close">✕</button>
+    <div class="more-menu-grid">
+      <button id="btn-screens" class="more-btn"><span class="more-icon">🖥️</span><span>Screens</span></button>
+      <button id="btn-clipboard" class="more-btn"><span class="more-icon">📋</span><span>Clipboard</span></button>
+      <button id="btn-screenshot" class="more-btn"><span class="more-icon">📷</span><span>Screenshot</span></button>
+      <button id="btn-settings" class="more-btn"><span class="more-icon">⚙️</span><span>Settings</span></button>
+      <button id="btn-fullscreen" class="more-btn"><span class="more-icon">⛶</span><span>Fullscreen</span></button>
+      <button id="btn-disconnect" class="more-btn disconnect-btn"><span class="more-icon">✕</span><span>Disconnect</span></button>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

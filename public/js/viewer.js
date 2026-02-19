@@ -95,6 +95,7 @@
   const displaysList  = $('#displays-list');
   const clipboardPanel = $('#clipboard-panel');
   const clipboardText  = $('#clipboard-text');
+  const moreMenu      = $('#more-menu');
 
   // Frame rendering pipeline
   const img = new Image();
@@ -560,6 +561,7 @@
     if (name === 'keys')      keysPanel.classList.remove('hidden');
     if (name === 'displays')  displaysPanel.classList.remove('hidden');
     if (name === 'clipboard') clipboardPanel.classList.remove('hidden');
+    if (name === 'more')      { if (moreMenu) moreMenu.classList.remove('hidden'); }
   }
 
   function closeAllPanels() {
@@ -569,6 +571,7 @@
     keysPanel.classList.add('hidden');
     displaysPanel.classList.add('hidden');
     clipboardPanel.classList.add('hidden');
+    if (moreMenu) moreMenu.classList.add('hidden');
   }
 
   backdrop.addEventListener('click', closeAllPanels);
@@ -744,6 +747,9 @@
           if (evt === 'mouse-click') pos.button = 'left';
           S.socket?.emit(evt, pos);
           S.lastTapTime = ts;
+          // Auto-pop keyboard on tap so user can type immediately
+          // (e.g. tapped a text field on remote desktop)
+          if (!keyboardOpen) openKeyboard();
         }
       }
     }
@@ -961,10 +967,55 @@
     updateModeUI();
   });
 
-  on('btn-keyboard', () => { closeAllPanels(); kbInput.focus(); kbInput.click(); });
+  // ───────────────────────────────────────────────────────
+  //  KEYBOARD MANAGEMENT
+  //  Toggle keyboard visibility; auto-pop on single tap
+  // ───────────────────────────────────────────────────────
+
+  let keyboardOpen = false;
+
+  function openKeyboard() {
+    keyboardOpen = true;
+    document.body.classList.add('keyboard-active');
+    const btn = $('#btn-keyboard');
+    if (btn) btn.classList.add('active');
+    kbInput.focus();
+    kbInput.click();
+  }
+
+  function closeKeyboard() {
+    keyboardOpen = false;
+    document.body.classList.remove('keyboard-active');
+    const btn = $('#btn-keyboard');
+    if (btn) btn.classList.remove('active');
+    kbInput.blur();
+  }
+
+  function toggleKeyboard() {
+    if (keyboardOpen) closeKeyboard(); else openKeyboard();
+  }
+
+  // Close keyboard when input loses focus (user dismissed it)
+  kbInput.addEventListener('blur', () => {
+    // Small delay so we don't fight btn-keyboard tap
+    setTimeout(() => {
+      if (!kbInput.matches(':focus')) {
+        keyboardOpen = false;
+        document.body.classList.remove('keyboard-active');
+        const btn = $('#btn-keyboard');
+        if (btn) btn.classList.remove('active');
+      }
+    }, 100);
+  });
+
+  on('btn-keyboard', () => { closeAllPanels(); toggleKeyboard(); });
+
+  on('btn-more', () => {
+    if (S.panelOpen === 'more') closeAllPanels(); else openPanel('more');
+  });
 
   on('btn-screens', () => {
-    if (S.panelOpen === 'displays') { closeAllPanels(); return; }
+    closeAllPanels();
     S.socket?.emit('list-screens');
     openPanel('displays');
   });
