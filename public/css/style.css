@@ -577,6 +577,7 @@ code {
   align-items: center;
   justify-content: center;
   background: #000;
+  contain: layout style paint;  /* browser paint optimization */
 }
 
 #remote-canvas {
@@ -586,6 +587,8 @@ code {
   touch-action: none;
   will-change: transform;
   image-rendering: auto;
+  backface-visibility: hidden;  /* force GPU compositing layer */
+  -webkit-backface-visibility: hidden;
 }
 
 .cursor-indicator {
@@ -596,6 +599,8 @@ code {
   display: none;
   z-index: 10;
   will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .cursor-indicator::before {

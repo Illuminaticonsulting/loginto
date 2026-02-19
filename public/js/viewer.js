@@ -23,6 +23,8 @@
   const MAX_ZOOM = 8;
   const MOVE_THROTTLE_MS = 16;  // ~60 Hz mouse-move emit rate
   const EDGE_MARGIN = 0.12;     // 12% of viewport as auto-pan zone
+  const PAN_LERP = 0.35;        // auto-pan smoothing factor (0=frozen, 1=instant)
+  const TOUCH_SMOOTH = 0.6;     // touch delta EMA smoothing (0=raw, 1=max smooth)
 
   // ─── State ──────────────────────────────────────────────
   const S = {
@@ -94,9 +96,29 @@
   const clipboardPanel = $('#clipboard-panel');
   const clipboardText  = $('#clipboard-text');
 
-  // Frame double-buffer
+  // Frame rendering pipeline
   const img = new Image();
   let framePending = false;
+  let pendingFrameData = null;       // queues the LATEST frame while one is decoding
+  let rafId = null;
+  let transformDirty = false;
+
+  // Cached container rect (avoid per-event getBoundingClientRect)
+  let cachedBoxRect = { x: 0, y: 0 };
+  function updateBoxRect() {
+    const r = box.getBoundingClientRect();
+    cachedBoxRect = { x: r.left, y: r.top };
+  }
+  window.addEventListener('resize', updateBoxRect);
+  window.addEventListener('scroll', updateBoxRect, true);
+  setTimeout(updateBoxRect, 0);
+
+  // Touch smoothing state (EMA)
+  let smoothDX = 0, smoothDY = 0;
+
+  // Auto-pan target (for lerp smoothing)
+  let panTargetX = 0, panTargetY = 0;
+  let autoPanActive = false;
 
   // ───────────────────────────────────────────────────────
   //  INIT
@@ -112,7 +134,7 @@
     .catch(() => initSocket());
 
   // Recompute fit on resize
-  window.addEventListener('resize', () => { if (S.screenInfo) computeFit(); });
+  window.addEventListener('resize', () => { if (S.screenInfo) computeFit(); updateBoxRect(); });
 
   // ───────────────────────────────────────────────────────
   //  SOCKET
@@ -126,7 +148,7 @@
       transports: ['websocket', 'polling'],
     });
 
-    S.socket.on('connect', () => { S.connected = true; setStatus('Connected', false); });
+    S.socket.on('connect', () => { S.connected = true; setStatus('Connected', false); updateBoxRect(); });
     S.socket.on('disconnect', () => { S.connected = false; setStatus('Reconnecting…', true); });
     S.socket.on('connect_error', err => {
       if (err.message === 'Authentication required') { localStorage.clear(); window.location.href = '/'; }
@@ -202,8 +224,6 @@
     S.lastFrameTime = now;
     S.fpsCounter++;
 
-    if (S.fpsCounter % 10 === 0) latEl.textContent = Math.round(S.avgInterval) + 'ms';
-
     // Update quality slider to show adaptive quality from agent
     if (data.quality && Math.abs(data.quality - S.currentQuality) > 1) {
       S.currentQuality = data.quality;
@@ -211,10 +231,30 @@
       qualVal.textContent = data.quality + '%';
     }
 
-    if (framePending) return;        // drop frame if previous still decoding
+    // Queue latest frame — if one is already decoding, keep the newest
+    if (framePending) {
+      pendingFrameData = data;
+      return;
+    }
+
+    decodeAndRender(data);
+  }
+
+  function decodeAndRender(data) {
     framePending = true;
 
-    // Support both binary (ArrayBuffer/Buffer) and legacy base64 frames
+    // Prefer createImageBitmap for off-thread decode (huge mobile perf win)
+    if (typeof createImageBitmap === 'function' && (data.data instanceof ArrayBuffer || data.data instanceof Uint8Array)) {
+      const blob = new Blob([data.data], { type: 'image/jpeg' });
+      createImageBitmap(blob).then(bmp => {
+        paintFrame(bmp, data.width, data.height);
+        bmp.close();
+        finishFrame();
+      }).catch(() => { finishFrame(); });
+      return;
+    }
+
+    // Fallback: Blob URL for binary, base64 data URL for legacy
     let blobUrl;
     if (data.data instanceof ArrayBuffer || data.data instanceof Uint8Array) {
       const blob = new Blob([data.data], { type: 'image/jpeg' });
@@ -222,22 +262,31 @@
     }
 
     img.onload = () => {
-      if (canvas.width !== data.width || canvas.height !== data.height) {
-        canvas.width = data.width;
-        canvas.height = data.height;
-        computeFit();
-      }
-      ctx.drawImage(img, 0, 0);
-      framePending = false;
+      paintFrame(img, data.width, data.height);
       if (blobUrl) URL.revokeObjectURL(blobUrl);
-      applyTransform();
+      finishFrame();
     };
-    img.onerror = () => { framePending = false; if (blobUrl) URL.revokeObjectURL(blobUrl); };
+    img.onerror = () => { if (blobUrl) URL.revokeObjectURL(blobUrl); finishFrame(); };
+    img.src = blobUrl || ('data:image/jpeg;base64,' + data.data);
+  }
 
-    if (blobUrl) {
-      img.src = blobUrl;
-    } else {
-      img.src = 'data:image/jpeg;base64,' + data.data;
+  function paintFrame(source, w, h) {
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      computeFit();
+    }
+    ctx.drawImage(source, 0, 0);
+    scheduleTransform();
+  }
+
+  function finishFrame() {
+    framePending = false;
+    // If a newer frame was queued while we were decoding, render it now
+    if (pendingFrameData) {
+      const next = pendingFrameData;
+      pendingFrameData = null;
+      decodeAndRender(next);
     }
   }
 
@@ -253,17 +302,52 @@
     if (!cw || !ch) return;
     S.baseScale = Math.min(bw / cw, bh / ch);
     S.panX = 0; S.panY = 0;
-    applyTransform();
+    panTargetX = 0; panTargetY = 0;
+    autoPanActive = false;
+    applyTransformImmediate();
   }
 
   function totalScale() { return S.baseScale * S.zoom; }
 
-  function applyTransform() {
+  // Batch all transform updates into a single rAF (prevents layout thrashing)
+  function scheduleTransform() {
+    if (!transformDirty) {
+      transformDirty = true;
+      rafId = requestAnimationFrame(flushTransform);
+    }
+  }
+
+  function flushTransform() {
+    transformDirty = false;
+
+    // Smooth auto-pan lerp
+    if (autoPanActive) {
+      S.panX += (panTargetX - S.panX) * PAN_LERP;
+      S.panY += (panTargetY - S.panY) * PAN_LERP;
+      // Keep animating until close enough
+      if (Math.abs(panTargetX - S.panX) > 0.5 || Math.abs(panTargetY - S.panY) > 0.5) {
+        scheduleTransform();
+      } else {
+        S.panX = panTargetX;
+        S.panY = panTargetY;
+        autoPanActive = false;
+      }
+    }
+
+    applyTransformImmediate();
+  }
+
+  function applyTransformImmediate() {
     const ts = totalScale();
     clampPan(ts);
     canvas.style.transformOrigin = '0 0';
-    canvas.style.transform = 'translate(' + S.panX + 'px,' + S.panY + 'px) scale(' + ts + ')';
+    canvas.style.transform = 'translate3d(' + S.panX + 'px,' + S.panY + 'px,0) scale(' + ts + ')';
     updateCursor();
+  }
+
+  // Legacy: direct apply (used by zoom/pinch where we need instant response)
+  function applyTransform() {
+    scheduleTransform();
   }
 
   function clampPan(ts) {
@@ -281,7 +365,7 @@
     const ratio = nts / old;
     S.panX = focusX - (focusX - S.panX) * ratio;
     S.panY = focusY - (focusY - S.panY) * ratio;
-    applyTransform();
+    applyTransformImmediate();  // instant for zoom (no rAF delay)
     flashZoom();
   }
 
@@ -305,10 +389,7 @@
   // ───────────────────────────────────────────────────────
 
   function containerOffset() {
-    // We cache this per-frame via getBoundingClientRect on the
-    // container (not the canvas, which has transforms that confuse).
-    const r = box.getBoundingClientRect();
-    return { x: r.left, y: r.top };
+    return cachedBoxRect;
   }
 
   function clientToRemote(cx, cy) {
@@ -337,7 +418,7 @@
     const ih = S.screenInfo.inputHeight || S.screenInfo.height;
     const x = S.cursorX / iw * canvas.width  * ts + S.panX;
     const y = S.cursorY / ih * canvas.height * ts + S.panY;
-    cursor.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    cursor.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
     showCursor();
     cursor.classList.toggle('dragging', S.isDragging);
   }
@@ -360,13 +441,16 @@
 
   function moveCursorDelta(dx, dy) {
     if (!S.screenInfo) return;
+    // EMA smoothing on touch deltas — reduces jitter on mobile
+    smoothDX = smoothDX * TOUCH_SMOOTH + dx * (1 - TOUCH_SMOOTH);
+    smoothDY = smoothDY * TOUCH_SMOOTH + dy * (1 - TOUCH_SMOOTH);
     const iw = S.screenInfo.inputWidth || S.screenInfo.width;
     const ih = S.screenInfo.inputHeight || S.screenInfo.height;
-    S.cursorX = Math.max(0, Math.min(iw, S.cursorX + dx * TRACKPAD_SPEED));
-    S.cursorY = Math.max(0, Math.min(ih, S.cursorY + dy * TRACKPAD_SPEED));
+    S.cursorX = Math.max(0, Math.min(iw, S.cursorX + smoothDX * TRACKPAD_SPEED));
+    S.cursorY = Math.max(0, Math.min(ih, S.cursorY + smoothDY * TRACKPAD_SPEED));
     emitMove();
     autoPan();
-    applyTransform();
+    scheduleTransform();
   }
 
   // ───────────────────────────────────────────────────────
@@ -390,10 +474,19 @@
     const mx = bw * EDGE_MARGIN;
     const my = bh * EDGE_MARGIN;
 
-    if (cx < mx)       S.panX += (mx - cx);
-    if (cx > bw - mx)  S.panX -= (cx - (bw - mx));
-    if (cy < my)       S.panY += (my - cy);
-    if (cy > bh - my)  S.panY -= (cy - (bh - my));
+    // Compute target pan with smooth lerp instead of instant snap
+    let tx = S.panX, ty = S.panY;
+    if (cx < mx)       tx += (mx - cx);
+    if (cx > bw - mx)  tx -= (cx - (bw - mx));
+    if (cy < my)       ty += (my - cy);
+    if (cy > bh - my)  ty -= (cy - (bh - my));
+
+    if (tx !== S.panX || ty !== S.panY) {
+      panTargetX = tx;
+      panTargetY = ty;
+      autoPanActive = true;
+      scheduleTransform();
+    }
   }
 
   // ───────────────────────────────────────────────────────
@@ -496,7 +589,7 @@
         // Also pan to follow midpoint
         S.panX += (mx - S.pinchMidX);
         S.panY += (my - S.pinchMidY);
-        applyTransform();
+        applyTransformImmediate();  // instant for pinch (no rAF delay)
         S.pinchMidX = mx; S.pinchMidY = my;
       } else if (S.twoFingerAction === 'scroll') {
         S.scrollAccX += (S.pinchMidX - mx) * SCROLL_SPEED;
