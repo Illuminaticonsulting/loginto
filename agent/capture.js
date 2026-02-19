@@ -1,9 +1,14 @@
 /**
  * Screen Capture Module
  *
- * Captures the desktop screen as JPEG frames and streams them
- * via a callback. Uses screenshot-desktop for cross-platform capture
- * and sharp for fast resizing/compression.
+ * Captures the desktop screen as JPEG frames and streams them.
+ * Uses screenshot-desktop for cross-platform capture and sharp
+ * for fast resizing/compression.
+ *
+ * Key quality settings (like LogMeIn):
+ *  - 4:4:4 chroma subsampling (no color blur on text)
+ *  - lanczos3 resampling (sharp downscale, no jagged edges)
+ *  - High quality default (92)
  */
 
 const screenshot = require('screenshot-desktop');
@@ -11,15 +16,16 @@ const sharp = require('sharp');
 
 class ScreenCapture {
   constructor(options = {}) {
-    this.quality = options.quality || 60;
-    this.fps = options.fps || 15;
-    this.scale = options.scale || 0.5;
+    this.quality = options.quality || 92;
+    this.fps = options.fps || 20;
+    this.scale = options.scale || 1.0;
     this.streaming = false;
     this.interval = null;
     this.screenWidth = 1920;
     this.screenHeight = 1080;
     this.lastFrame = null;
     this.frameCount = 0;
+    this.capturing = false; // prevent overlapping captures
 
     // Detect screen resolution
     this._detectScreen();
@@ -32,17 +38,25 @@ class ScreenCapture {
       this.screenWidth = metadata.width;
       this.screenHeight = metadata.height;
       console.log(`🖥️  Screen detected: ${this.screenWidth}x${this.screenHeight}`);
+
+      // Auto-detect retina: if resolution is very high, scale down to logical pixels
+      if (this.scale >= 1.0 && (this.screenWidth > 2500 || this.screenHeight > 1600)) {
+        this.scale = 0.5;
+        console.log(`🔍 Retina detected — auto-scaling to 0.5x (${Math.round(this.screenWidth * this.scale)}x${Math.round(this.screenHeight * this.scale)})`);
+      }
     } catch (err) {
       console.warn('⚠️  Could not detect screen size, using defaults');
     }
   }
 
   getScreenInfo() {
+    const sw = Math.round(this.screenWidth * this.scale);
+    const sh = Math.round(this.screenHeight * this.scale);
     return {
       width: this.screenWidth,
       height: this.screenHeight,
-      scaledWidth: Math.round(this.screenWidth * this.scale),
-      scaledHeight: Math.round(this.screenHeight * this.scale),
+      scaledWidth: sw,
+      scaledHeight: sh,
       quality: this.quality,
       fps: this.fps,
       scale: this.scale
@@ -57,7 +71,6 @@ class ScreenCapture {
   setFPS(fps) {
     this.fps = Math.min(30, Math.max(1, fps));
     if (this.streaming) {
-      // Restart with new FPS
       clearInterval(this.interval);
       this._startInterval(this._currentCallback);
     }
@@ -70,28 +83,24 @@ class ScreenCapture {
   }
 
   startStreaming(callback) {
-    if (this.streaming) {
-      this.stopStreaming();
-    }
-
+    if (this.streaming) this.stopStreaming();
     this.streaming = true;
     this._currentCallback = callback;
     this.frameCount = 0;
-
-    console.log(`🎬 Streaming started (${this.fps} FPS, ${this.quality}% quality, ${this.scale}x scale)`);
+    console.log(`🎬 Streaming: ${this.fps} FPS, quality ${this.quality}, scale ${this.scale}x, chroma 4:4:4`);
     this._startInterval(callback);
   }
 
   _startInterval(callback) {
     const intervalMs = Math.round(1000 / this.fps);
 
-    // Capture loop
     this.interval = setInterval(async () => {
-      if (!this.streaming) return;
+      if (!this.streaming || this.capturing) return;
+      this.capturing = true;
 
       try {
         const frame = await this._captureFrame();
-        if (frame) {
+        if (frame && this.streaming) {
           this.frameCount++;
           callback({
             data: frame.toString('base64'),
@@ -102,31 +111,34 @@ class ScreenCapture {
           });
         }
       } catch (err) {
-        // Skip frame on error (screen lock, permission, etc.)
         if (this.frameCount === 0) {
           console.error('❌ Screen capture error:', err.message);
         }
+      } finally {
+        this.capturing = false;
       }
     }, intervalMs);
   }
 
   async _captureFrame() {
-    // Capture raw screenshot
     const img = await screenshot({ format: 'png' });
 
-    // Resize and compress to JPEG
-    const scaledWidth = Math.round(this.screenWidth * this.scale);
-    const scaledHeight = Math.round(this.screenHeight * this.scale);
+    let pipeline = sharp(img);
 
-    const frame = await sharp(img)
-      .resize(scaledWidth, scaledHeight, {
-        fit: 'fill',
-        kernel: sharp.kernel.nearest  // Fast, good for screen content
-      })
+    // Only resize if scale < 1.0 (saves CPU when sending full res)
+    if (this.scale < 0.99) {
+      pipeline = pipeline.resize(
+        Math.round(this.screenWidth * this.scale),
+        Math.round(this.screenHeight * this.scale),
+        { fit: 'fill', kernel: sharp.kernel.lanczos3 }
+      );
+    }
+
+    const frame = await pipeline
       .jpeg({
         quality: this.quality,
-        mozjpeg: false,  // Faster encoding
-        chromaSubsampling: '4:2:0'
+        mozjpeg: false,
+        chromaSubsampling: '4:4:4'  // Full color — no blur on colored text
       })
       .toBuffer();
 
