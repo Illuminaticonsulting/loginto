@@ -747,9 +747,6 @@
           if (evt === 'mouse-click') pos.button = 'left';
           S.socket?.emit(evt, pos);
           S.lastTapTime = ts;
-          // Auto-pop keyboard on tap so user can type immediately
-          // (e.g. tapped a text field on remote desktop)
-          if (!keyboardOpen) openKeyboard();
         }
       }
     }
