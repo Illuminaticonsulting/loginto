@@ -52,7 +52,7 @@
       if (data.agentKey) {
         agentKeyBox.textContent = data.agentKey;
         const cmd = `curl -sL "${location.origin}/api/setup/${data.agentKey}" | bash`;
-        const cmdWin = `irm "${location.origin}/api/setup-win/${data.agentKey}" | iex`;
+        const cmdWin = `powershell -ExecutionPolicy Bypass -Command "irm '${location.origin}/api/setup-win/${data.agentKey}' | iex"`;
         setupCommand.textContent = cmd;
         if (setupCommandWin) setupCommandWin.textContent = cmdWin;
         if (setupCommandOnline) setupCommandOnline.textContent = cmd;
