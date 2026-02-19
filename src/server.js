@@ -150,7 +150,8 @@ app.get('/api/setup/:agentKey', (req, res) => {
   const user = users.getByAgentKey(req.params.agentKey);
   if (!user) return res.status(404).send('# Invalid agent key');
 
-  const serverURL = `${req.protocol}://${req.get('host')}`;
+  // Always use HTTPS (Nginx terminates SSL, so req.protocol might be 'http')
+  const serverURL = `https://${req.get('host')}`;
   const key = req.params.agentKey;
 
   const script = `#!/bin/bash
@@ -214,9 +215,9 @@ ENVFILE
 
 # Download agent files from server
 echo "📥 Downloading agent files..."
-curl -sf "${serverURL}/agent-files/agent.js"  -o agent.js
-curl -sf "${serverURL}/agent-files/capture.js" -o capture.js
-curl -sf "${serverURL}/agent-files/input.js"   -o input.js
+curl -sfL "${serverURL}/agent-files/agent.js"  -o agent.js
+curl -sfL "${serverURL}/agent-files/capture.js" -o capture.js
+curl -sfL "${serverURL}/agent-files/input.js"   -o input.js
 
 # Install dependencies
 echo "📦 Installing dependencies (this may take a minute)..."
