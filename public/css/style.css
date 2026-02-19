@@ -482,13 +482,49 @@ code {
 
 .back-link {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   text-decoration: none;
-  margin-right: 4px;
+  margin-right: 2px;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .back-link:hover {
   color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.mode-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+
+.zoom-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 50;
+}
+
+.zoom-indicator.visible {
+  opacity: 1;
 }
 
 .status-dot {
@@ -549,29 +585,71 @@ code {
   object-fit: contain;
   image-rendering: auto;
   touch-action: none;
+  will-change: transform;
+  transition: none;
 }
 
 .cursor-indicator {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
   pointer-events: none;
   transform: translate(-50%, -50%);
   display: none;
   z-index: 10;
-  transition: left 0.05s, top 0.05s;
+  transition: left 0.03s linear, top 0.03s linear;
+}
+
+.cursor-indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 4px; height: 4px;
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cursor-indicator::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 20px; height: 20px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.6;
 }
 
 .cursor-indicator.visible {
   display: block;
 }
 
-.cursor-indicator.clicking {
-  background: var(--accent-glow);
-  transform: translate(-50%, -50%) scale(1.5);
-  transition: transform 0.1s;
+.cursor-indicator.clicking::after {
+  width: 28px; height: 28px;
+  border-color: var(--success);
+  opacity: 1;
+  transition: all 0.15s;
+}
+
+.cursor-indicator.clicking::before {
+  background: var(--success);
+  width: 6px; height: 6px;
+}
+
+.cursor-indicator.trackpad-cursor::after {
+  border-color: var(--accent);
+}
+
+.cursor-indicator.dragging::after {
+  border-color: var(--warning);
+  width: 26px; height: 26px;
+  border-width: 2px;
+  opacity: 1;
+}
+
+.cursor-indicator.dragging::before {
+  background: var(--warning);
 }
 
 /* Offline Overlay */

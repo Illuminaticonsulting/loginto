@@ -123,6 +123,34 @@ class InputHandler {
   }
 
   /**
+   * Press mouse button down (for dragging)
+   */
+  mouseDown(x, y, button = 'left') {
+    if (this.useRobot) {
+      try {
+        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.mouseToggle('down', button);
+      } catch (e) { /* ignore */ }
+    } else {
+      this._fallbackMouseDown(x, y, button);
+    }
+  }
+
+  /**
+   * Release mouse button (end dragging)
+   */
+  mouseUp(x, y, button = 'left') {
+    if (this.useRobot) {
+      try {
+        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.mouseToggle('up', button);
+      } catch (e) { /* ignore */ }
+    } else {
+      this._fallbackMouseUp(x, y, button);
+    }
+  }
+
+  /**
    * Press a key with optional modifiers
    */
   keyPress(key, modifiers = []) {
@@ -228,6 +256,26 @@ class InputHandler {
     try {
       if (this.platform === 'linux') {
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} click --repeat 2 1`, { timeout: 500 });
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  _fallbackMouseDown(x, y, button = 'left') {
+    const { execSync } = require('child_process');
+    try {
+      if (this.platform === 'linux') {
+        const btn = button === 'right' ? '3' : '1';
+        execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} mousedown ${btn}`, { timeout: 500 });
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  _fallbackMouseUp(x, y, button = 'left') {
+    const { execSync } = require('child_process');
+    try {
+      if (this.platform === 'linux') {
+        const btn = button === 'right' ? '3' : '1';
+        execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} mouseup ${btn}`, { timeout: 500 });
       }
     } catch (e) { /* ignore */ }
   }

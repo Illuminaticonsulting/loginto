@@ -25,9 +25,10 @@
   <!-- Status Bar -->
   <div id="status-bar" class="status-bar">
     <div class="status-left">
-      <a href="/dashboard.html" class="back-link">← Dashboard</a>
+      <a href="/dashboard.html" class="back-link">←</a>
       <span class="status-dot"></span>
       <span id="status-text">Connecting...</span>
+      <span id="mode-badge" class="mode-badge">Trackpad</span>
     </div>
     <div class="status-right">
       <span id="fps-display">-- FPS</span>
@@ -42,6 +43,7 @@
   <div id="canvas-container">
     <canvas id="remote-canvas"></canvas>
     <div id="cursor-indicator" class="cursor-indicator"></div>
+    <div id="zoom-indicator" class="zoom-indicator">100%</div>
   </div>
 
   <!-- Floating Toolbar -->
@@ -58,9 +60,10 @@
     </div>
     <div class="toolbar-divider"></div>
     <div class="toolbar-actions">
+      <button id="mode-toggle-btn" class="toolbar-btn">🖱️ Trackpad</button>
       <button id="keyboard-btn" class="toolbar-btn">⌨️ Keyboard</button>
-      <button id="special-keys-btn" class="toolbar-btn">🔧 Special Keys</button>
-      <button id="right-click-mode-btn" class="toolbar-btn">🖱️ Right-Click Mode</button>
+      <button id="special-keys-btn" class="toolbar-btn">🔧 Keys</button>
+      <button id="right-click-mode-btn" class="toolbar-btn">🖱️ R-Click</button>
     </div>
   </div>
 

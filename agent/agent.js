@@ -154,6 +154,14 @@ function connect() {
     input.scroll(data.x, data.y, data.deltaX, data.deltaY);
   });
 
+  socket.on('mouse-down', (data) => {
+    input.mouseDown(data.x, data.y, data.button || 'left');
+  });
+
+  socket.on('mouse-up', (data) => {
+    input.mouseUp(data.x, data.y, data.button || 'left');
+  });
+
   socket.on('key-press', (data) => {
     input.keyPress(data.key, data.modifiers || []);
   });

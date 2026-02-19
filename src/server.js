@@ -351,7 +351,8 @@ io.on('connection', (socket) => {
 
     // Relay input → agent
     ['mouse-move', 'mouse-click', 'mouse-double-click',
-     'mouse-right-click', 'mouse-scroll', 'key-press', 'key-type'
+     'mouse-right-click', 'mouse-scroll', 'mouse-down', 'mouse-up',
+     'key-press', 'key-type'
     ].forEach(event => {
       socket.on(event, (data) => {
         const agent = agents.get(socket.userId);
