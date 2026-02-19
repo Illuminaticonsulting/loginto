@@ -26,6 +26,7 @@
   const stateOffline = document.getElementById('state-offline');
   const agentKeyBox = document.getElementById('agent-key-box');
   const setupCommand = document.getElementById('setup-command');
+  const setupCommandWin = document.getElementById('setup-command-win');
   const setupCommandOnline = document.getElementById('setup-command-online');
   const copyFeedback = document.getElementById('copy-feedback');
   const copyFeedbackOnline = document.getElementById('copy-feedback-online');
@@ -51,7 +52,9 @@
       if (data.agentKey) {
         agentKeyBox.textContent = data.agentKey;
         const cmd = `curl -sL "${location.origin}/api/setup/${data.agentKey}" | bash`;
+        const cmdWin = `irm "${location.origin}/api/setup-win/${data.agentKey}" | iex`;
         setupCommand.textContent = cmd;
+        if (setupCommandWin) setupCommandWin.textContent = cmdWin;
         if (setupCommandOnline) setupCommandOnline.textContent = cmd;
       }
     }).catch(() => {
@@ -74,6 +77,31 @@
         sel.addRange(range);
       });
     }
+  });
+
+  // Copy Windows setup command on click
+  if (setupCommandWin) {
+    setupCommandWin.addEventListener('click', () => {
+      const text = setupCommandWin.textContent;
+      if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
+        navigator.clipboard.writeText(text).then(() => {
+          copyFeedback.style.display = 'block';
+          setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
+        }).catch(() => {});
+      }
+    });
+  }
+
+  // OS tab switching (Mac/Linux vs Windows)
+  document.querySelectorAll('.os-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.setup-os-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const os = tab.dataset.os;
+      const panel = document.getElementById(os === 'win' ? 'setup-win' : 'setup-mac');
+      if (panel) panel.classList.add('active');
+    });
   });
 
   // Copy agent key on click

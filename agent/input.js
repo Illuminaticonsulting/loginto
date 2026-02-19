@@ -43,6 +43,35 @@ class InputHandler {
     // Detect platform for fallback commands
     this.platform = process.platform;
     console.log(`🎮 Input handler: fallback mode (${this.platform})`);
+
+    if (this.platform === 'win32') {
+      // On Windows, get screen size via PowerShell
+      try {
+        const { execSync } = require('child_process');
+        const out = execSync('powershell -NoProfile -Command "[System.Windows.Forms.Screen]::PrimaryScreen.Bounds | Select-Object Width,Height | ConvertTo-Json"', { timeout: 5000, encoding: 'utf8' });
+        const parsed = JSON.parse(out);
+        if (parsed.Width && parsed.Height) {
+          this.screenWidth = parsed.Width;
+          this.screenHeight = parsed.Height;
+          console.log(`🖥️  Screen size (via PowerShell): ${this.screenWidth}x${this.screenHeight}`);
+        }
+      } catch (e) {
+        // Try alternative method
+        try {
+          const { execSync } = require('child_process');
+          const out = execSync('wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution /format:value', { timeout: 5000, encoding: 'utf8' });
+          const hMatch = out.match(/CurrentHorizontalResolution=(\d+)/);
+          const vMatch = out.match(/CurrentVerticalResolution=(\d+)/);
+          if (hMatch && vMatch) {
+            this.screenWidth = parseInt(hMatch[1]);
+            this.screenHeight = parseInt(vMatch[1]);
+            console.log(`🖥️  Screen size (via WMIC): ${this.screenWidth}x${this.screenHeight}`);
+          }
+        } catch (e2) {
+          console.warn('⚠️  Could not detect screen size on Windows');
+        }
+      }
+    }
   }
 
   /**
@@ -225,16 +254,96 @@ class InputHandler {
     }
   }
 
-  // ─── Fallback Methods (AppleScript on Mac, xdotool on Linux) ───
+  // ─── Fallback Methods (AppleScript on Mac, xdotool on Linux, PowerShell on Windows) ───
+
+  _psMouseScript(x, y, action) {
+    // PowerShell script for Windows mouse operations using Win32 API
+    const scripts = {
+      move: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})`,
+      click: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})
+[WinInput]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+[WinInput]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)`,
+      rightclick: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})
+[WinInput]::mouse_event(0x0008, 0, 0, 0, [IntPtr]::Zero)
+[WinInput]::mouse_event(0x0010, 0, 0, 0, [IntPtr]::Zero)`,
+      doubleclick: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})
+[WinInput]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+[WinInput]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+Start-Sleep -Milliseconds 50
+[WinInput]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+[WinInput]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)`,
+      mousedown: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})
+[WinInput]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)`,
+      mouseup: `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class WinInput {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+}
+"@
+[WinInput]::SetCursorPos(${Math.round(x)}, ${Math.round(y)})
+[WinInput]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)`,
+    };
+    return scripts[action] || scripts.move;
+  }
+
+  _runPS(script) {
+    const { execSync } = require('child_process');
+    try {
+      // -NoProfile for speed, -ExecutionPolicy Bypass so it runs without restrictions
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`, { timeout: 3000, windowsHide: true });
+    } catch (e) { /* ignore */ }
+  }
 
   _fallbackMoveMouse(x, y) {
     const { execSync } = require('child_process');
     try {
       if (this.platform === 'darwin') {
-        // macOS: use cliclick if available, or AppleScript
         execSync(`osascript -e 'tell application "System Events" to set position of the cursor to {${Math.round(x)}, ${Math.round(y)}}'`, { timeout: 500 });
       } else if (this.platform === 'linux') {
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)}`, { timeout: 500 });
+      } else if (this.platform === 'win32') {
+        this._runPS(this._psMouseScript(x, y, 'move'));
       }
     } catch (e) { /* ignore */ }
   }
@@ -243,7 +352,6 @@ class InputHandler {
     const { execSync } = require('child_process');
     try {
       if (this.platform === 'darwin') {
-        const btn = button === 'right' ? 'right' : 'left';
         execSync(`osascript -e '
           tell application "System Events"
             click at {${Math.round(x)}, ${Math.round(y)}}
@@ -252,6 +360,8 @@ class InputHandler {
       } else if (this.platform === 'linux') {
         const btn = button === 'right' ? '3' : '1';
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} click ${btn}`, { timeout: 500 });
+      } else if (this.platform === 'win32') {
+        this._runPS(this._psMouseScript(x, y, button === 'right' ? 'rightclick' : 'click'));
       }
     } catch (e) { /* ignore */ }
   }
@@ -261,6 +371,8 @@ class InputHandler {
     try {
       if (this.platform === 'linux') {
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} click --repeat 2 1`, { timeout: 500 });
+      } else if (this.platform === 'win32') {
+        this._runPS(this._psMouseScript(x, y, 'doubleclick'));
       }
     } catch (e) { /* ignore */ }
   }
@@ -271,6 +383,8 @@ class InputHandler {
       if (this.platform === 'linux') {
         const btn = button === 'right' ? '3' : '1';
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} mousedown ${btn}`, { timeout: 500 });
+      } else if (this.platform === 'win32') {
+        this._runPS(this._psMouseScript(x, y, 'mousedown'));
       }
     } catch (e) { /* ignore */ }
   }
@@ -281,6 +395,8 @@ class InputHandler {
       if (this.platform === 'linux') {
         const btn = button === 'right' ? '3' : '1';
         execSync(`xdotool mousemove ${Math.round(x)} ${Math.round(y)} mouseup ${btn}`, { timeout: 500 });
+      } else if (this.platform === 'win32') {
+        this._runPS(this._psMouseScript(x, y, 'mouseup'));
       }
     } catch (e) { /* ignore */ }
   }
@@ -296,6 +412,27 @@ class InputHandler {
         } else {
           execSync(`xdotool key ${keyName}`, { timeout: 500 });
         }
+      } else if (this.platform === 'win32') {
+        // Use SendKeys via PowerShell for keyboard input
+        const winKeyMap = {
+          'Enter': '{ENTER}', 'Backspace': '{BACKSPACE}', 'Tab': '{TAB}',
+          'Escape': '{ESC}', 'Delete': '{DELETE}', 'ArrowUp': '{UP}',
+          'ArrowDown': '{DOWN}', 'ArrowLeft': '{LEFT}', 'ArrowRight': '{RIGHT}',
+          'Home': '{HOME}', 'End': '{END}', 'PageUp': '{PGUP}', 'PageDown': '{PGDN}',
+          'Space': ' ', 'Insert': '{INSERT}',
+          'F1': '{F1}', 'F2': '{F2}', 'F3': '{F3}', 'F4': '{F4}',
+          'F5': '{F5}', 'F6': '{F6}', 'F7': '{F7}', 'F8': '{F8}',
+          'F9': '{F9}', 'F10': '{F10}', 'F11': '{F11}', 'F12': '{F12}',
+        };
+        let sendKey = winKeyMap[key] || key;
+        // Wrap with modifier prefixes: ^ = Ctrl, % = Alt, + = Shift
+        for (const m of modifiers) {
+          if (m === 'ctrl') sendKey = '^' + sendKey;
+          else if (m === 'alt') sendKey = '%' + sendKey;
+          else if (m === 'shift') sendKey = '+' + sendKey;
+        }
+        const escaped = sendKey.replace(/'/g, "''");
+        execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${escaped}')"`, { timeout: 2000, windowsHide: true });
       }
     } catch (e) { /* ignore */ }
   }
@@ -305,6 +442,10 @@ class InputHandler {
     try {
       if (this.platform === 'linux') {
         execSync(`xdotool type --clearmodifiers "${text.replace(/"/g, '\\"')}"`, { timeout: 2000 });
+      } else if (this.platform === 'win32') {
+        // Escape special SendKeys characters: + ^ % ~ { } [ ] ( )
+        const escaped = text.replace(/([+^%~{}[\]()])/g, '{$1}').replace(/'/g, "''");
+        execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${escaped}')"`, { timeout: 3000, windowsHide: true });
       }
     } catch (e) { /* ignore */ }
   }

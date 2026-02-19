@@ -283,6 +283,116 @@ node agent.js
   res.type('text/plain').send(script);
 });
 
+// ─── Windows Setup Script (PowerShell) ──────────────────
+app.get('/api/setup-win/:agentKey', (req, res) => {
+  const user = users.getByAgentKey(req.params.agentKey);
+  if (!user) return res.status(404).send('# Invalid agent key');
+
+  const serverURL = `https://${req.get('host')}`;
+  const key = req.params.agentKey;
+
+  const script = `
+# LogInTo Agent - Windows PowerShell Installer
+# Run this in PowerShell (as Administrator recommended)
+
+$ErrorActionPreference = "Stop"
+
+Write-Host ""
+Write-Host "=============================================" -ForegroundColor Cyan
+Write-Host "   LogInTo - Desktop Agent Installer (Win)"   -ForegroundColor Cyan
+Write-Host "=============================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Check Node.js
+try {
+    $nodeVersion = node -v
+    Write-Host "[OK] Node.js $nodeVersion found" -ForegroundColor Green
+} catch {
+    Write-Host "[!] Node.js is NOT installed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "    Download from: https://nodejs.org/en/download" -ForegroundColor Yellow
+    Write-Host "    Install the Windows Installer (.msi), then re-run this script."
+    Write-Host ""
+    pause
+    exit 1
+}
+
+# Create agent directory
+$agentDir = "$env:USERPROFILE\\loginto-agent"
+if (!(Test-Path $agentDir)) { New-Item -ItemType Directory -Path $agentDir | Out-Null }
+Set-Location $agentDir
+Write-Host "[OK] Agent directory: $agentDir" -ForegroundColor Green
+
+# Write package.json
+@'
+{
+  "name": "loginto-agent",
+  "version": "1.0.0",
+  "description": "LogInTo Desktop Agent",
+  "main": "agent.js",
+  "scripts": { "start": "node agent.js" },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "screenshot-desktop": "^1.12.7",
+    "sharp": "^0.33.2",
+    "socket.io-client": "^4.7.4"
+  },
+  "optionalDependencies": { "robotjs": "^0.6.0" }
+}
+'@ | Set-Content -Path "package.json" -Encoding UTF8
+
+# Write .env
+@"
+SERVER_URL=${serverURL}
+AGENT_KEY=${key}
+CAPTURE_QUALITY=92
+CAPTURE_FPS=20
+CAPTURE_SCALE=1.0
+"@ | Set-Content -Path ".env" -Encoding UTF8
+
+# Download agent files
+Write-Host "Downloading agent files..." -ForegroundColor Yellow
+Invoke-WebRequest -Uri "${serverURL}/agent-files/agent.js"  -OutFile "agent.js"  -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/capture.js" -OutFile "capture.js" -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"   -OutFile "input.js"   -UseBasicParsing
+
+# Install dependencies (skip robotjs if it fails)
+Write-Host "Installing dependencies..." -ForegroundColor Yellow
+npm install --no-optional --no-fund --no-audit 2>$null
+Write-Host "[OK] Core dependencies installed" -ForegroundColor Green
+
+# Try robotjs (optional)
+Write-Host "Trying robotjs (optional)..." -ForegroundColor Yellow
+npm install robotjs 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[i] robotjs skipped - using PowerShell fallback (works fine)" -ForegroundColor Yellow
+} else {
+    Write-Host "[OK] robotjs installed" -ForegroundColor Green
+}
+
+# Create start script
+@"
+@echo off
+title LogInTo Agent
+cd /d "%~dp0"
+node agent.js
+pause
+"@ | Set-Content -Path "start-agent.bat" -Encoding ASCII
+
+Write-Host ""
+Write-Host "=============================================" -ForegroundColor Green
+Write-Host "   Agent installed successfully!"              -ForegroundColor Green
+Write-Host "=============================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "   Starting agent..." -ForegroundColor Cyan
+Write-Host ""
+
+node agent.js
+`;
+
+  res.type('text/plain').send(script);
+});
+
 // Serve agent source files (for the setup script to download)
 app.use('/agent-files', express.static(path.join(__dirname, '..', 'agent'), {
   index: false,

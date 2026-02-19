@@ -71,18 +71,31 @@
             <div class="step-content">
               <strong>Open Terminal on your laptop</strong>
               <p class="text-muted text-sm">On macOS: press <code>Cmd + Space</code>, type "Terminal", hit Enter.<br>
-              On Windows: press <code>Win + R</code>, type "powershell", hit Enter.</p>
+              On Windows: press <code>Win + X</code>, choose "PowerShell" or "Terminal".</p>
             </div>
           </div>
 
           <div class="step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <strong>Copy &amp; paste this single command</strong>
-              <p class="text-muted text-sm">This will download, configure, and start the agent automatically:</p>
-              <div id="setup-command" class="code-block setup-oneliner" title="Click to copy">
-                Loading...
+              <strong>Copy &amp; paste this command</strong>
+
+              <div class="setup-os-tabs">
+                <button class="os-tab active" data-os="mac">Mac / Linux</button>
+                <button class="os-tab" data-os="win">Windows</button>
               </div>
+
+              <div id="setup-mac" class="setup-os-panel active">
+                <div id="setup-command" class="code-block setup-oneliner" title="Click to copy">
+                  Loading...
+                </div>
+              </div>
+              <div id="setup-win" class="setup-os-panel">
+                <div id="setup-command-win" class="code-block setup-oneliner" title="Click to copy">
+                  Loading...
+                </div>
+              </div>
+
               <p id="copy-feedback" class="text-sm text-success" style="display:none">✅ Copied to clipboard!</p>
               <p class="text-muted text-sm" style="margin-top: 8px;">That's it! Keep the terminal open. Your status above will switch to <span class="text-success">● Online</span>.</p>
             </div>

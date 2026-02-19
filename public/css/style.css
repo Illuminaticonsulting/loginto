@@ -437,6 +437,56 @@ code {
   border-color: var(--accent);
 }
 
+/* OS Tab Switcher (Mac vs Windows) */
+.setup-os-tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.os-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.os-tab:first-child {
+  border-radius: var(--radius-sm) 0 0 0;
+  border-right: none;
+}
+
+.os-tab:last-child {
+  border-radius: 0 var(--radius-sm) 0 0;
+}
+
+.os-tab.active {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  border-bottom-color: var(--bg-elevated);
+}
+
+.setup-os-panel {
+  display: none;
+}
+
+.setup-os-panel.active {
+  display: block;
+}
+
+.setup-os-panel .code-block {
+  margin-top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-top: none;
+}
+
 .advanced-toggle {
   margin-top: 16px;
 }
