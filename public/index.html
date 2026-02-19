@@ -6,15 +6,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a0a0f">
-  <title>LogInTo</title>
+  <title>LogInTo — Remote Desktop Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="page-login">
 
-  <!-- ─── Login Screen ─────────────────────────────────── -->
   <div id="login-screen" class="screen active">
     <div class="login-container">
       <div class="logo">
@@ -28,108 +27,28 @@
           </svg>
         </div>
         <h1>LogInTo</h1>
-        <p class="subtitle">Remote Desktop Access</p>
+        <p class="subtitle">Remote Desktop Dashboard</p>
       </div>
 
       <form id="login-form">
         <div class="input-group">
-          <input type="password" id="password-input" placeholder="Enter access password" autocomplete="current-password" required>
+          <input type="password" id="password-input" placeholder="Enter your password" autocomplete="current-password" required>
         </div>
         <button type="submit" id="login-btn" class="btn-primary">
-          <span class="btn-text">Connect</span>
+          <span class="btn-text">Sign In</span>
           <span class="btn-loading" style="display:none">
-            <span class="spinner"></span> Connecting...
+            <span class="spinner"></span> Signing in...
           </span>
         </button>
         <p id="login-error" class="error-text" style="display:none"></p>
       </form>
 
       <div class="login-footer">
-        <p>🔒 End-to-end encrypted</p>
+        <p>Encrypted connection &middot; Kingpin Strategies</p>
       </div>
     </div>
   </div>
 
-  <!-- ─── Remote Desktop Screen ────────────────────────── -->
-  <div id="desktop-screen" class="screen">
-    <!-- Status Bar -->
-    <div id="status-bar" class="status-bar">
-      <div class="status-left">
-        <span class="status-dot"></span>
-        <span id="status-text">Connected</span>
-      </div>
-      <div class="status-right">
-        <span id="fps-display">-- FPS</span>
-        <span id="latency-display">-- ms</span>
-        <button id="toolbar-toggle" class="icon-btn" title="Settings">⚙️</button>
-        <button id="fullscreen-btn" class="icon-btn" title="Fullscreen">⛶</button>
-        <button id="disconnect-btn" class="icon-btn disconnect" title="Disconnect">✕</button>
-      </div>
-    </div>
-
-    <!-- Canvas (remote screen) -->
-    <div id="canvas-container">
-      <canvas id="remote-canvas"></canvas>
-      <div id="cursor-indicator" class="cursor-indicator"></div>
-    </div>
-
-    <!-- Floating Toolbar -->
-    <div id="toolbar" class="toolbar hidden">
-      <div class="toolbar-section">
-        <label>Quality</label>
-        <input type="range" id="quality-slider" min="10" max="100" value="60" step="5">
-        <span id="quality-value">60%</span>
-      </div>
-      <div class="toolbar-section">
-        <label>FPS</label>
-        <input type="range" id="fps-slider" min="1" max="30" value="15" step="1">
-        <span id="fps-value">15</span>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="toolbar-actions">
-        <button id="keyboard-btn" class="toolbar-btn">⌨️ Keyboard</button>
-        <button id="special-keys-btn" class="toolbar-btn">🔧 Special Keys</button>
-        <button id="right-click-mode-btn" class="toolbar-btn">🖱️ Right-Click Mode</button>
-      </div>
-    </div>
-
-    <!-- Virtual Keyboard Trigger (hidden input) -->
-    <input type="text" id="keyboard-input" class="keyboard-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-
-    <!-- Special Keys Panel -->
-    <div id="special-keys" class="special-keys hidden">
-      <div class="special-keys-grid">
-        <button data-key="Escape" class="skey">Esc</button>
-        <button data-key="Tab" class="skey">Tab</button>
-        <button data-key="Delete" class="skey">Del</button>
-        <button data-key="Home" class="skey">Home</button>
-        <button data-key="End" class="skey">End</button>
-        <button data-key="PageUp" class="skey">PgUp</button>
-        <button data-key="PageDown" class="skey">PgDn</button>
-        <button data-key="ArrowUp" class="skey">↑</button>
-        <button data-key="ArrowDown" class="skey">↓</button>
-        <button data-key="ArrowLeft" class="skey">←</button>
-        <button data-key="ArrowRight" class="skey">→</button>
-        <button data-key="Enter" class="skey">Enter</button>
-      </div>
-      <div class="modifier-keys">
-        <button id="mod-ctrl" class="skey mod" data-mod="ctrl">Ctrl</button>
-        <button id="mod-alt" class="skey mod" data-mod="alt">Alt</button>
-        <button id="mod-shift" class="skey mod" data-mod="shift">Shift</button>
-        <button id="mod-meta" class="skey mod" data-mod="meta">⌘/Win</button>
-      </div>
-      <div class="shortcut-combos">
-        <button class="skey combo" data-combo="ctrl+c">Copy</button>
-        <button class="skey combo" data-combo="ctrl+v">Paste</button>
-        <button class="skey combo" data-combo="ctrl+a">Sel All</button>
-        <button class="skey combo" data-combo="ctrl+z">Undo</button>
-        <button class="skey combo" data-combo="ctrl+s">Save</button>
-        <button class="skey combo" data-combo="alt+Tab">Alt-Tab</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/client.js"></script>
+  <script src="/js/login.js"></script>
 </body>
 </html>

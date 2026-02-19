@@ -1,0 +1,21 @@
+{
+  "name": "loginto-agent",
+  "version": "1.0.0",
+  "description": "LogInTo Desktop Agent — streams your screen to the dashboard",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "screenshot-desktop": "^1.12.7",
+    "sharp": "^0.33.2",
+    "socket.io-client": "^4.7.4"
+  },
+  "optionalDependencies": {
+    "robotjs": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>LogInTo — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="page-dashboard">
+
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div class="logo-small">
+      <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+        <rect x="4" y="8" width="40" height="28" rx="3" stroke="currentColor" stroke-width="2.5" fill="none"/>
+        <line x1="14" y1="40" x2="34" y2="40" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="24" y1="36" x2="24" y2="40" stroke="currentColor" stroke-width="2.5"/>
+      </svg>
+      <span>LogInTo</span>
+    </div>
+    <div class="dashboard-user">
+      <span id="user-greeting"></span>
+      <button id="logout-btn" class="btn-logout">Log Out</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="dashboard-content">
+
+    <!-- Welcome -->
+    <div class="dashboard-welcome">
+      <h2>Your Machine</h2>
+      <p class="text-muted">Connect to your laptop from anywhere</p>
+    </div>
+
+    <!-- Machine Card -->
+    <div class="machine-card">
+      <div class="machine-status">
+        <span id="status-dot" class="dot offline"></span>
+        <span id="status-label">Checking...</span>
+      </div>
+
+      <!-- Online State -->
+      <div id="state-online" class="machine-state" style="display:none">
+        <p class="text-muted mb-16">Your desktop agent is running and ready.</p>
+        <a href="/viewer.html" class="btn-primary btn-connect">Connect to Desktop</a>
+      </div>
+
+      <!-- Offline State -->
+      <div id="state-offline" class="machine-state" style="display:none">
+        <p class="text-muted mb-16">Your desktop agent is not connected. Follow the steps below to set it up on your laptop.</p>
+
+        <div class="setup-instructions">
+          <h3>🖥️ Set Up Desktop Agent</h3>
+
+          <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <strong>Open Terminal on your laptop</strong>
+              <p class="text-muted text-sm">On macOS: press <code>Cmd + Space</code>, type "Terminal", hit Enter.<br>
+              On Windows: press <code>Win + R</code>, type "cmd", hit Enter.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <strong>Navigate to the agent folder</strong>
+              <div class="code-block">
+                cd ~/Desktop/loginto/agent
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <strong>Copy your Agent Key</strong>
+              <p class="text-muted text-sm">Click the key below to copy it — this is your unique device identifier:</p>
+              <div id="agent-key-box" class="agent-key-display" title="Click to copy">
+                Loading...
+              </div>
+              <p id="copy-feedback" class="text-sm text-success" style="display:none">✅ Copied to clipboard!</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <strong>Create your <code>.env</code> config file</strong>
+              <div class="code-block">
+                cp .env.example .env
+              </div>
+              <p class="text-muted text-sm" style="margin-top: 8px;">Open <code>.env</code> in any text editor and paste your agent key:</p>
+              <div class="code-block">
+                SERVER_URL=https://loginto.kingpinstrategies.com<br>
+                AGENT_KEY=<span class="text-accent">paste-your-key-here</span><br>
+                CAPTURE_QUALITY=60<br>
+                CAPTURE_FPS=15<br>
+                CAPTURE_SCALE=0.5
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <strong>Install dependencies &amp; start</strong>
+              <div class="code-block">
+                npm install<br>
+                npm start
+              </div>
+              <p class="text-muted text-sm" style="margin-top: 8px;">Keep this running. Your status above will switch to <span class="text-success">● Online</span>.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">6</div>
+            <div class="step-content">
+              <strong>Grant permissions (macOS only)</strong>
+              <p class="text-muted text-sm">System Settings → Privacy &amp; Security → <strong>Screen Recording</strong> — add Terminal</p>
+              <p class="text-muted text-sm">System Settings → Privacy &amp; Security → <strong>Accessibility</strong> — add Terminal</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="dashboard-footer">
+      <p>Kingpin Strategies &middot; loginto.kingpinstrategies.com</p>
+    </div>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

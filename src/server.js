@@ -1,9 +1,14 @@
 /**
- * LogInTo — Personal Remote Desktop Server
+ * LogInTo — Multi-User Dashboard & Relay Server
  *
- * Runs on your laptop. Serves the web client to your phone.
- * Captures your screen and streams it via WebSocket.
- * Receives mouse/keyboard input from your phone and injects it.
+ * Runs on DigitalOcean. Does NOT capture screens or inject input.
+ * Instead, it RELAYS:
+ *   - Screen frames FROM desktop agents TO phone viewers
+ *   - Input events FROM phone viewers TO desktop agents
+ *
+ * Two roles connect via Socket.IO:
+ *   - agent: runs on user's laptop (captures screen, injects input)
+ *   - viewer: runs in user's phone browser (views screen, sends input)
  */
 
 require('dotenv').config();
@@ -13,27 +18,21 @@ const { Server } = require('socket.io');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const ScreenCapture = require('./capture');
-const InputHandler = require('./input');
+const users = require('./users');
 
 // ─── Config ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3456;
-const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || 'changeme123';
 const SESSION_SECRET = process.env.SESSION_SECRET || uuidv4();
 const MAX_LOGIN_ATTEMPTS = parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5;
 const LOCKOUT_MINUTES = parseInt(process.env.LOCKOUT_MINUTES) || 15;
-const CAPTURE_QUALITY = parseInt(process.env.CAPTURE_QUALITY) || 60;
-const CAPTURE_FPS = parseInt(process.env.CAPTURE_FPS) || 15;
-const CAPTURE_SCALE = parseFloat(process.env.CAPTURE_SCALE) || 0.5;
 
 // ─── App Setup ───────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: false },
-  maxHttpBufferSize: 10e6, // 10MB max for screen frames
+  maxHttpBufferSize: 10e6,
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -64,19 +63,14 @@ const loginLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// ─── Auth State ──────────────────────────────────────────
-const sessions = new Map(); // token → { created, lastActive }
-let passwordHash = null;
-
-async function initPassword() {
-  passwordHash = await bcrypt.hash(ACCESS_PASSWORD, 12);
-  console.log('🔒 Password protection enabled');
-}
+// ─── State ───────────────────────────────────────────────
+const sessions = new Map();  // token → { userId, created, lastActive }
+const agents = new Map();    // userId → { socket, screenInfo, connected }
+const viewers = new Map();   // userId → { socket, connected }
 
 function isValidSession(token) {
   const session = sessions.get(token);
   if (!session) return false;
-  // Sessions expire after 24 hours
   if (Date.now() - session.created > 24 * 60 * 60 * 1000) {
     sessions.delete(token);
     return false;
@@ -85,9 +79,12 @@ function isValidSession(token) {
   return true;
 }
 
-// ─── Routes ──────────────────────────────────────────────
+function getSession(token) {
+  return sessions.get(token) || null;
+}
 
-// Login page
+// ─── HTTP Routes ─────────────────────────────────────────
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -95,141 +92,194 @@ app.get('/', (req, res) => {
 // Login endpoint
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { password } = req.body;
-
   if (!password) {
     return res.status(400).json({ error: 'Password required' });
   }
 
-  const valid = await bcrypt.compare(password, passwordHash);
-  if (!valid) {
+  const user = await users.authenticateByPassword(password);
+  if (!user) {
     return res.status(401).json({ error: 'Wrong password' });
   }
 
   const token = uuidv4();
-  sessions.set(token, { created: Date.now(), lastActive: Date.now() });
+  sessions.set(token, {
+    userId: user.id,
+    created: Date.now(),
+    lastActive: Date.now()
+  });
 
-  console.log('✅ New session authenticated');
-  res.json({ token });
+  console.log(`✅ ${user.displayName} logged in`);
+  res.json({ token, userId: user.id, displayName: user.displayName });
 });
 
 // Session check
 app.get('/api/session', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (isValidSession(token)) {
-    res.json({ valid: true });
-  } else {
-    res.status(401).json({ valid: false });
-  }
-});
-
-// Get screen info
-app.get('/api/screen-info', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
   if (!isValidSession(token)) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ valid: false });
   }
-  const info = screenCapture.getScreenInfo();
-  res.json(info);
+  const session = getSession(token);
+  const user = users.getById(session.userId);
+  res.json({ valid: true, userId: session.userId, displayName: user?.displayName });
 });
 
-// ─── Screen Capture ──────────────────────────────────────
-const screenCapture = new ScreenCapture({
-  quality: CAPTURE_QUALITY,
-  fps: CAPTURE_FPS,
-  scale: CAPTURE_SCALE
+// Agent status
+app.get('/api/user-status/:userId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const agent = agents.get(req.params.userId);
+  res.json({ agentConnected: agent?.connected || false });
 });
 
-// ─── Input Handler ───────────────────────────────────────
-const inputHandler = new InputHandler();
+// Agent key
+app.get('/api/agent-info/:userId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
 
-// ─── Socket.IO Connection ────────────────────────────────
-let activeViewer = null;
+  const agentKey = users.getAgentKey(req.params.userId);
+  res.json({ agentKey });
+});
 
+// ─── Socket.IO Auth Middleware ───────────────────────────
 io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (isValidSession(token)) {
+  const { token, role, agentKey } = socket.handshake.auth;
+
+  if (role === 'agent') {
+    if (!agentKey) return next(new Error('Agent key required'));
+    const user = users.getByAgentKey(agentKey);
+    if (!user) return next(new Error('Invalid agent key'));
+    socket.userId = user.id;
+    socket.displayName = user.displayName;
+    socket.role = 'agent';
     next();
   } else {
-    next(new Error('Authentication required'));
+    if (!isValidSession(token)) return next(new Error('Authentication required'));
+    const session = getSession(token);
+    socket.userId = session.userId;
+    socket.role = role || 'viewer';
+    next();
   }
 });
 
+// ─── Socket.IO Connection Handler ────────────────────────
 io.on('connection', (socket) => {
-  console.log(`📱 Device connected: ${socket.id}`);
 
-  if (activeViewer) {
-    // Disconnect previous viewer (only 1 at a time for personal use)
-    activeViewer.emit('kicked', { reason: 'Another device connected' });
-    activeViewer.disconnect();
+  // ═══ AGENT ═══
+  if (socket.role === 'agent') {
+    console.log(`🖥️  Agent online: ${socket.displayName}`);
+
+    const existing = agents.get(socket.userId);
+    if (existing?.connected) {
+      existing.socket.emit('kicked', { reason: 'Another agent connected' });
+      existing.socket.disconnect();
+    }
+
+    agents.set(socket.userId, { socket, screenInfo: null, connected: true });
+
+    // Notify all viewers/dashboards for this user
+    io.sockets.sockets.forEach(s => {
+      if (s.userId === socket.userId && s.role !== 'agent') {
+        s.emit('agent-status', { connected: true });
+      }
+    });
+
+    socket.on('screen-info', (info) => {
+      const agent = agents.get(socket.userId);
+      if (agent) agent.screenInfo = info;
+      io.sockets.sockets.forEach(s => {
+        if (s.userId === socket.userId && s.role === 'viewer') {
+          s.emit('screen-info', info);
+        }
+      });
+    });
+
+    socket.on('frame', (frameData) => {
+      io.sockets.sockets.forEach(s => {
+        if (s.userId === socket.userId && s.role === 'viewer' && s.connected) {
+          s.volatile.emit('frame', frameData);
+        }
+      });
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`🖥️  Agent offline: ${socket.displayName || socket.userId}`);
+      agents.delete(socket.userId);
+      io.sockets.sockets.forEach(s => {
+        if (s.userId === socket.userId && s.role !== 'agent') {
+          s.emit('agent-status', { connected: false });
+        }
+      });
+    });
   }
-  activeViewer = socket;
 
-  // Start streaming screen
-  screenCapture.startStreaming((frameData) => {
-    if (socket.connected) {
-      socket.volatile.emit('frame', frameData);
+  // ═══ VIEWER ═══
+  else if (socket.role === 'viewer') {
+    console.log(`📱 Viewer connected: ${socket.userId}`);
+
+    const existing = viewers.get(socket.userId);
+    if (existing?.connected) {
+      existing.socket.emit('kicked', { reason: 'Another device connected' });
+      existing.socket.disconnect();
     }
-  });
+    viewers.set(socket.userId, { socket, connected: true });
 
-  // Send initial screen info
-  socket.emit('screen-info', screenCapture.getScreenInfo());
-
-  // ─── Handle Input Events from Phone ────────────────
-  socket.on('mouse-move', (data) => {
-    inputHandler.moveMouse(data.x, data.y);
-  });
-
-  socket.on('mouse-click', (data) => {
-    inputHandler.click(data.x, data.y, data.button || 'left');
-  });
-
-  socket.on('mouse-double-click', (data) => {
-    inputHandler.doubleClick(data.x, data.y);
-  });
-
-  socket.on('mouse-right-click', (data) => {
-    inputHandler.rightClick(data.x, data.y);
-  });
-
-  socket.on('mouse-scroll', (data) => {
-    inputHandler.scroll(data.x, data.y, data.deltaX || 0, data.deltaY || 0);
-  });
-
-  socket.on('key-press', (data) => {
-    inputHandler.keyPress(data.key, data.modifiers || []);
-  });
-
-  socket.on('key-type', (data) => {
-    inputHandler.typeText(data.text);
-  });
-
-  // Settings updates
-  socket.on('update-quality', (data) => {
-    screenCapture.setQuality(data.quality);
-  });
-
-  socket.on('update-fps', (data) => {
-    screenCapture.setFPS(data.fps);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`📱 Device disconnected: ${socket.id}`);
-    if (activeViewer === socket) {
-      activeViewer = null;
-      screenCapture.stopStreaming();
+    const agent = agents.get(socket.userId);
+    if (agent?.connected) {
+      socket.emit('agent-status', { connected: true });
+      agent.socket.emit('start-streaming');
+      if (agent.screenInfo) socket.emit('screen-info', agent.screenInfo);
+    } else {
+      socket.emit('agent-status', { connected: false });
     }
-  });
+
+    // Relay input → agent
+    ['mouse-move', 'mouse-click', 'mouse-double-click',
+     'mouse-right-click', 'mouse-scroll', 'key-press', 'key-type'
+    ].forEach(event => {
+      socket.on(event, (data) => {
+        const agent = agents.get(socket.userId);
+        if (agent?.connected) agent.socket.emit(event, data);
+      });
+    });
+
+    socket.on('update-quality', (data) => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('update-quality', data);
+    });
+    socket.on('update-fps', (data) => {
+      const a = agents.get(socket.userId);
+      if (a?.connected) a.socket.emit('update-fps', data);
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`📱 Viewer disconnected: ${socket.userId}`);
+      viewers.delete(socket.userId);
+      const agent = agents.get(socket.userId);
+      if (agent?.connected) agent.socket.emit('stop-streaming');
+    });
+  }
+
+  // ═══ DASHBOARD (lightweight status listener) ═══
+  else if (socket.role === 'dashboard') {
+    const agent = agents.get(socket.userId);
+    socket.emit('agent-status', { connected: agent?.connected || false });
+    socket.on('disconnect', () => { /* no cleanup */ });
+  }
 });
 
 // ─── Start Server ────────────────────────────────────────
 async function start() {
-  await initPassword();
+  await users.init();
 
   server.listen(PORT, '0.0.0.0', () => {
     const os = require('os');
     const interfaces = os.networkInterfaces();
     let localIP = 'localhost';
-
     for (const name of Object.keys(interfaces)) {
       for (const iface of interfaces[name]) {
         if (iface.family === 'IPv4' && !iface.internal) {
@@ -241,17 +291,13 @@ async function start() {
 
     console.log('');
     console.log('═══════════════════════════════════════════');
-    console.log('   🖥️  LogInTo — Remote Desktop Running');
+    console.log('   🖥️  LogInTo — Dashboard Server Running');
     console.log('═══════════════════════════════════════════');
     console.log('');
     console.log(`   Local:   http://localhost:${PORT}`);
     console.log(`   Network: http://${localIP}:${PORT}`);
     console.log('');
-    console.log('   📱 Open the Network URL on your phone');
-    console.log('      (when on same WiFi)');
-    console.log('');
-    console.log('   🌐 For remote access, run:');
-    console.log('      npm run tunnel');
+    console.log('   Users: kingpin, tez');
     console.log('');
     console.log('═══════════════════════════════════════════');
     console.log('');
