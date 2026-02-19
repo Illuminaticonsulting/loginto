@@ -25,6 +25,7 @@
   const stateOnline = document.getElementById('state-online');
   const stateOffline = document.getElementById('state-offline');
   const agentKeyBox = document.getElementById('agent-key-box');
+  const setupCommand = document.getElementById('setup-command');
   const copyFeedback = document.getElementById('copy-feedback');
 
   // ─── Init UI ───────────────────────────────────────────
@@ -40,17 +41,37 @@
     }
   }).catch(() => {});
 
-  // ─── Load Agent Key ────────────────────────────────────
+  // ─── Load Agent Key & Build Setup Command ───────────────
   fetch('/api/agent-info/' + userId, {
     headers: { 'Authorization': 'Bearer ' + token }
   }).then(res => res.json())
     .then(data => {
       if (data.agentKey) {
         agentKeyBox.textContent = data.agentKey;
+        const cmd = `curl -sL "${location.origin}/api/setup/${data.agentKey}" | bash`;
+        setupCommand.textContent = cmd;
       }
     }).catch(() => {
       agentKeyBox.textContent = 'Error loading key';
+      setupCommand.textContent = 'Error loading setup command';
     });
+
+  // Copy setup command on click
+  setupCommand.addEventListener('click', () => {
+    const text = setupCommand.textContent;
+    if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
+      navigator.clipboard.writeText(text).then(() => {
+        copyFeedback.style.display = 'block';
+        setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
+      }).catch(() => {
+        const range = document.createRange();
+        range.selectNodeContents(setupCommand);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
+    }
+  });
 
   // Copy agent key on click
   agentKeyBox.addEventListener('click', () => {
@@ -60,7 +81,6 @@
         copyFeedback.style.display = 'block';
         setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
       }).catch(() => {
-        // Fallback: select text
         const range = document.createRange();
         range.selectNodeContents(agentKeyBox);
         const sel = window.getSelection();

@@ -145,6 +145,117 @@ app.get('/api/agent-info/:userId', (req, res) => {
   res.json({ agentKey });
 });
 
+// Setup script — one-liner install for desktop agent
+app.get('/api/setup/:agentKey', (req, res) => {
+  const user = users.getByAgentKey(req.params.agentKey);
+  if (!user) return res.status(404).send('# Invalid agent key');
+
+  const serverURL = `${req.protocol}://${req.get('host')}`;
+  const key = req.params.agentKey;
+
+  const script = `#!/bin/bash
+set -e
+
+echo ""
+echo "═══════════════════════════════════════════"
+echo "   LogInTo — Desktop Agent Installer"
+echo "═══════════════════════════════════════════"
+echo ""
+
+# Check for Node.js
+if ! command -v node &>/dev/null; then
+  echo "❌ Node.js is not installed."
+  echo ""
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "   Install it with:  brew install node"
+    echo "   Or download from: https://nodejs.org"
+  else
+    echo "   Install it with:  sudo apt install -y nodejs npm"
+    echo "   Or download from: https://nodejs.org"
+  fi
+  echo ""
+  exit 1
+fi
+
+echo "✅ Node.js found: $(node -v)"
+
+# Create agent directory
+AGENT_DIR="$HOME/loginto-agent"
+mkdir -p "$AGENT_DIR"
+cd "$AGENT_DIR"
+echo "📁 Agent directory: $AGENT_DIR"
+
+# Write package.json
+cat > package.json << 'PKGJSON'
+{
+  "name": "loginto-agent",
+  "version": "1.0.0",
+  "description": "LogInTo Desktop Agent",
+  "main": "agent.js",
+  "scripts": { "start": "node agent.js" },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "screenshot-desktop": "^1.12.7",
+    "sharp": "^0.33.2",
+    "socket.io-client": "^4.7.4"
+  },
+  "optionalDependencies": { "robotjs": "^0.6.0" }
+}
+PKGJSON
+
+# Write .env
+cat > .env << ENVFILE
+SERVER_URL=${serverURL}
+AGENT_KEY=${key}
+CAPTURE_QUALITY=60
+CAPTURE_FPS=15
+CAPTURE_SCALE=0.5
+ENVFILE
+
+# Download agent files from server
+echo "📥 Downloading agent files..."
+curl -sf "${serverURL}/agent-files/agent.js"  -o agent.js
+curl -sf "${serverURL}/agent-files/capture.js" -o capture.js
+curl -sf "${serverURL}/agent-files/input.js"   -o input.js
+
+# Install dependencies
+echo "📦 Installing dependencies (this may take a minute)..."
+npm install --no-fund --no-audit 2>&1 | tail -1
+
+echo ""
+echo "═══════════════════════════════════════════"
+echo "   ✅ Agent installed successfully!"
+echo "═══════════════════════════════════════════"
+echo ""
+echo "   Starting agent..."
+echo ""
+
+# macOS permissions reminder
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "   ⚠️  macOS: Grant permissions if prompted:"
+  echo "      System Settings → Privacy → Screen Recording → Terminal"
+  echo "      System Settings → Privacy → Accessibility → Terminal"
+  echo ""
+fi
+
+node agent.js
+`;
+
+  res.type('text/plain').send(script);
+});
+
+// Serve agent source files (for the setup script to download)
+app.use('/agent-files', express.static(path.join(__dirname, '..', 'agent'), {
+  index: false,
+  dotfiles: 'ignore',
+  extensions: ['js']
+}));
+
+// ─── Catch-All: redirect unknown routes to login ─────────
+app.get('*', (req, res) => {
+  res.redirect('/');
+});
+
 // ─── Socket.IO Auth Middleware ───────────────────────────
 io.use((socket, next) => {
   const { token, role, agentKey } = socket.handshake.auth;

@@ -425,6 +425,30 @@ code {
   border-color: var(--accent);
 }
 
+.setup-oneliner {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+  word-break: break-all;
+  line-height: 1.6;
+  transition: border-color 0.2s;
+}
+.setup-oneliner:hover {
+  border-color: var(--accent);
+}
+
+.advanced-toggle {
+  margin-top: 16px;
+}
+.advanced-toggle summary {
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.7;
+}
+.advanced-toggle summary:hover {
+  opacity: 1;
+}
+
 /* ═══════════════════════════════════════════════════════════
    VIEWER
    ═══════════════════════════════════════════════════════════ */

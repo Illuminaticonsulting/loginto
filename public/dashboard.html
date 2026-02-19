@@ -62,70 +62,39 @@
             <div class="step-content">
               <strong>Open Terminal on your laptop</strong>
               <p class="text-muted text-sm">On macOS: press <code>Cmd + Space</code>, type "Terminal", hit Enter.<br>
-              On Windows: press <code>Win + R</code>, type "cmd", hit Enter.</p>
+              On Windows: press <code>Win + R</code>, type "powershell", hit Enter.</p>
             </div>
           </div>
 
           <div class="step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <strong>Navigate to the agent folder</strong>
-              <div class="code-block">
-                cd ~/Desktop/loginto/agent
+              <strong>Copy &amp; paste this single command</strong>
+              <p class="text-muted text-sm">This will download, configure, and start the agent automatically:</p>
+              <div id="setup-command" class="code-block setup-oneliner" title="Click to copy">
+                Loading...
               </div>
+              <p id="copy-feedback" class="text-sm text-success" style="display:none">✅ Copied to clipboard!</p>
+              <p class="text-muted text-sm" style="margin-top: 8px;">That's it! Keep the terminal open. Your status above will switch to <span class="text-success">● Online</span>.</p>
             </div>
           </div>
 
           <div class="step">
             <div class="step-number">3</div>
             <div class="step-content">
-              <strong>Copy your Agent Key</strong>
-              <p class="text-muted text-sm">Click the key below to copy it — this is your unique device identifier:</p>
-              <div id="agent-key-box" class="agent-key-display" title="Click to copy">
-                Loading...
-              </div>
-              <p id="copy-feedback" class="text-sm text-success" style="display:none">✅ Copied to clipboard!</p>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-number">4</div>
-            <div class="step-content">
-              <strong>Create your <code>.env</code> config file</strong>
-              <div class="code-block">
-                cp .env.example .env
-              </div>
-              <p class="text-muted text-sm" style="margin-top: 8px;">Open <code>.env</code> in any text editor and paste your agent key:</p>
-              <div class="code-block">
-                SERVER_URL=https://loginto.kingpinstrategies.com<br>
-                AGENT_KEY=<span class="text-accent">paste-your-key-here</span><br>
-                CAPTURE_QUALITY=60<br>
-                CAPTURE_FPS=15<br>
-                CAPTURE_SCALE=0.5
-              </div>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-number">5</div>
-            <div class="step-content">
-              <strong>Install dependencies &amp; start</strong>
-              <div class="code-block">
-                npm install<br>
-                npm start
-              </div>
-              <p class="text-muted text-sm" style="margin-top: 8px;">Keep this running. Your status above will switch to <span class="text-success">● Online</span>.</p>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-number">6</div>
-            <div class="step-content">
               <strong>Grant permissions (macOS only)</strong>
-              <p class="text-muted text-sm">System Settings → Privacy &amp; Security → <strong>Screen Recording</strong> — add Terminal</p>
-              <p class="text-muted text-sm">System Settings → Privacy &amp; Security → <strong>Accessibility</strong> — add Terminal</p>
+              <p class="text-muted text-sm">If prompted, go to System Settings → Privacy &amp; Security:</p>
+              <p class="text-muted text-sm">• <strong>Screen Recording</strong> — add Terminal</p>
+              <p class="text-muted text-sm">• <strong>Accessibility</strong> — add Terminal</p>
             </div>
           </div>
+
+          <details class="advanced-toggle">
+            <summary class="text-muted text-sm">Advanced: view your Agent Key</summary>
+            <div id="agent-key-box" class="agent-key-display" title="Click to copy" style="margin-top: 8px;">
+              Loading...
+            </div>
+          </details>
         </div>
       </div>
     </div>
