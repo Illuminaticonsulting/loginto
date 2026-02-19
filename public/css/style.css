@@ -1272,3 +1272,28 @@ body.fullscreen .action-bar:hover,
 body.fullscreen .action-bar:active {
   opacity: 1;
 }
+
+/* ─── Viewer Toast ─────────────────────────────────────── */
+.viewer-toast {
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  z-index: 10000;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.viewer-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

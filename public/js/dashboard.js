@@ -149,9 +149,15 @@
 
   // ─── Logout ────────────────────────────────────────────
   logoutBtn.addEventListener('click', () => {
-    socket.disconnect();
-    localStorage.clear();
-    window.location.href = '/';
+    // Invalidate server-side session, then clear local state
+    fetch('/api/logout', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).catch(() => {}).finally(() => {
+      socket.disconnect();
+      localStorage.clear();
+      window.location.href = '/';
+    });
   });
 
 })();

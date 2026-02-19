@@ -103,6 +103,17 @@ function getSession(token) {
 
 // ─── HTTP Routes ─────────────────────────────────────────
 
+// Health check — for load balancers / uptime monitoring
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.round(process.uptime()),
+    sessions: sessions.size,
+    agents: agents.size,
+    memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB'
+  });
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -372,22 +383,51 @@ io.on('connection', (socket) => {
       socket.emit('agent-status', { connected: false });
     }
 
-    // Relay input → agent
+    // ─── Input Validation Helpers ─────────────────────────
+    function validCoord(v) { return typeof v === 'number' && isFinite(v) && v >= -10 && v <= 100000; }
+    function validButton(v) { return ['left', 'right', 'middle'].includes(v); }
+    function validMouse(d) { return d && validCoord(d.x) && validCoord(d.y); }
+    function validScroll(d) { return validMouse(d) && typeof d.deltaX === 'number' && typeof d.deltaY === 'number'; }
+    function validKey(d) { return d && typeof d.key === 'string' && d.key.length <= 20; }
+
+    // Relay input → agent (with validation)
     ['mouse-move', 'mouse-click', 'mouse-double-click',
-     'mouse-right-click', 'mouse-scroll', 'mouse-down', 'mouse-up',
-     'key-press', 'key-type'
+     'mouse-right-click', 'mouse-down', 'mouse-up'
     ].forEach(event => {
       socket.on(event, (data) => {
+        if (!validMouse(data)) return;
+        if (data.button && !validButton(data.button)) return;
         const agent = agents.get(socket.userId);
         if (agent?.connected) agent.socket.emit(event, data);
       });
     });
 
+    socket.on('mouse-scroll', (data) => {
+      if (!validScroll(data)) return;
+      const agent = agents.get(socket.userId);
+      if (agent?.connected) agent.socket.emit('mouse-scroll', data);
+    });
+
+    socket.on('key-press', (data) => {
+      if (!validKey(data)) return;
+      if (data.modifiers && !Array.isArray(data.modifiers)) return;
+      const agent = agents.get(socket.userId);
+      if (agent?.connected) agent.socket.emit('key-press', data);
+    });
+
+    socket.on('key-type', (data) => {
+      if (!data || typeof data.text !== 'string' || data.text.length > 500) return;
+      const agent = agents.get(socket.userId);
+      if (agent?.connected) agent.socket.emit('key-type', data);
+    });
+
     socket.on('update-quality', (data) => {
+      if (!data || typeof data.quality !== 'number' || data.quality < 10 || data.quality > 100) return;
       const a = agents.get(socket.userId);
       if (a?.connected) a.socket.emit('update-quality', data);
     });
     socket.on('update-fps', (data) => {
+      if (!data || typeof data.fps !== 'number' || data.fps < 1 || data.fps > 60) return;
       const a = agents.get(socket.userId);
       if (a?.connected) a.socket.emit('update-fps', data);
     });
@@ -471,3 +511,20 @@ async function start() {
 }
 
 start().catch(console.error);
+
+// ─── Graceful Shutdown ───────────────────────────────────
+function shutdown(signal) {
+  console.log(`\n🛑 ${signal} received — shutting down gracefully...`);
+  // Notify all connected sockets
+  io.emit('server-shutdown', { message: 'Server restarting' });
+  // Stop accepting new connections
+  server.close(() => {
+    console.log('   HTTP server closed');
+    process.exit(0);
+  });
+  // Force exit after 5s if connections won't close
+  setTimeout(() => { console.log('   Force exit'); process.exit(1); }, 5000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

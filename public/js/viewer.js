@@ -148,8 +148,14 @@
       transports: ['websocket', 'polling'],
     });
 
-    S.socket.on('connect', () => { S.connected = true; setStatus('Connected', false); updateBoxRect(); });
-    S.socket.on('disconnect', () => { S.connected = false; setStatus('Reconnecting…', true); });
+    S.socket.on('connect', () => {
+      S.connected = true; setStatus('Connected', false); updateBoxRect();
+      if (S._wasDisconnected) { showToast('Reconnected'); S._wasDisconnected = false; }
+    });
+    S.socket.on('disconnect', () => {
+      S.connected = false; S._wasDisconnected = true;
+      setStatus('Reconnecting…', true); showToast('Connection lost — reconnecting…', true);
+    });
     S.socket.on('connect_error', err => {
       if (err.message === 'Authentication required') { localStorage.clear(); window.location.href = '/'; }
     });
@@ -1004,8 +1010,76 @@
     });
   }
 
+  // ───────────────────────────────────────────────────────
+  //  TOAST NOTIFICATIONS
+  // ───────────────────────────────────────────────────────
+  let toastEl = null;
+  let toastTimer = null;
+
+  function showToast(msg, persistent) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'viewer-toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.classList.add('visible');
+    clearTimeout(toastTimer);
+    if (!persistent) {
+      toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 2500);
+    }
+  }
+
   // Prevent iOS pinch-zoom on the page itself
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('gesturechange', e => e.preventDefault());
+
+  // ───────────────────────────────────────────────────────
+  //  WAKE LOCK — prevent screen from dimming during viewing
+  // ───────────────────────────────────────────────────────
+  let wakeLock = null;
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* user denied or not supported */ }
+  }
+
+  // Acquire on connect, re-acquire when tab becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && S.connected) requestWakeLock();
+  });
+
+  // Initial request after first frame
+  const origOnFrame = onFrame;
+  let wakeLockRequested = false;
+  // Patch onFrame to request wake lock once
+  const _origDecodeAndRender = decodeAndRender;
+
+  // Request wake lock when we first connect
+  const _origSetStatus = setStatus;
+  function setStatusWithWake(t, err) {
+    _origSetStatus(t, err);
+    if (!err && !wakeLockRequested) { wakeLockRequested = true; requestWakeLock(); }
+  }
+  // Can't easily override — just request on first frame arrival
+  if (S.connected) requestWakeLock();
+  // Also request after socket connects
+  setTimeout(() => { if (S.connected) requestWakeLock(); }, 2000);
+
+  // ───────────────────────────────────────────────────────
+  //  VISIBILITY API — pause streaming when tab is hidden
+  // ───────────────────────────────────────────────────────
+  document.addEventListener('visibilitychange', () => {
+    if (!S.socket || !S.connected) return;
+    if (document.visibilityState === 'hidden') {
+      S.socket.emit('update-fps', { fps: 1 });   // drop to 1 FPS when hidden
+    } else {
+      S.socket.emit('update-fps', { fps: S.currentFPSSetting }); // restore
+      requestWakeLock();
+    }
+  });
 
 })();
