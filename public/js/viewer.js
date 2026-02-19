@@ -138,8 +138,8 @@
       S.screenInfo = info;
       canvas.width = info.scaledWidth;
       canvas.height = info.scaledHeight;
-      S.cursorX = info.width / 2;
-      S.cursorY = info.height / 2;
+      S.cursorX = (info.inputWidth || info.width) / 2;
+      S.cursorY = (info.inputHeight || info.height) / 2;
       S.zoom = 1;
       computeFit();
       S.socket.emit('update-quality', { quality: S.currentQuality });
@@ -264,9 +264,12 @@
     const px = (cx - off.x - S.panX) / ts;
     const py = (cy - off.y - S.panY) / ts;
     if (!S.screenInfo) return { x: Math.round(px), y: Math.round(py) };
+    // Map to INPUT coordinates (logical/robotjs), not capture coordinates
+    const iw = S.screenInfo.inputWidth || S.screenInfo.width;
+    const ih = S.screenInfo.inputHeight || S.screenInfo.height;
     return {
-      x: Math.round(Math.max(0, Math.min(S.screenInfo.width,  px / canvas.width  * S.screenInfo.width))),
-      y: Math.round(Math.max(0, Math.min(S.screenInfo.height, py / canvas.height * S.screenInfo.height)))
+      x: Math.round(Math.max(0, Math.min(iw, px / canvas.width  * iw))),
+      y: Math.round(Math.max(0, Math.min(ih, py / canvas.height * ih)))
     };
   }
 
@@ -277,8 +280,10 @@
   function updateCursor() {
     if (!S.screenInfo || !cursor) return;
     const ts = totalScale();
-    const x = S.cursorX / S.screenInfo.width  * canvas.width  * ts + S.panX;
-    const y = S.cursorY / S.screenInfo.height * canvas.height * ts + S.panY;
+    const iw = S.screenInfo.inputWidth || S.screenInfo.width;
+    const ih = S.screenInfo.inputHeight || S.screenInfo.height;
+    const x = S.cursorX / iw * canvas.width  * ts + S.panX;
+    const y = S.cursorY / ih * canvas.height * ts + S.panY;
     cursor.style.transform = 'translate(' + x + 'px,' + y + 'px)';
     cursor.style.display = 'block';
     cursor.classList.toggle('dragging', S.isDragging);
@@ -298,8 +303,10 @@
 
   function moveCursorDelta(dx, dy) {
     if (!S.screenInfo) return;
-    S.cursorX = Math.max(0, Math.min(S.screenInfo.width,  S.cursorX + dx * TRACKPAD_SPEED));
-    S.cursorY = Math.max(0, Math.min(S.screenInfo.height, S.cursorY + dy * TRACKPAD_SPEED));
+    const iw = S.screenInfo.inputWidth || S.screenInfo.width;
+    const ih = S.screenInfo.inputHeight || S.screenInfo.height;
+    S.cursorX = Math.max(0, Math.min(iw, S.cursorX + dx * TRACKPAD_SPEED));
+    S.cursorY = Math.max(0, Math.min(ih, S.cursorY + dy * TRACKPAD_SPEED));
     emitMove();
     autoPan();
     applyTransform();
@@ -318,8 +325,10 @@
     const ts = totalScale();
 
     // Cursor position in container pixel coordinates
-    const cx = S.cursorX / S.screenInfo.width  * canvas.width  * ts + S.panX;
-    const cy = S.cursorY / S.screenInfo.height * canvas.height * ts + S.panY;
+    const iw = S.screenInfo.inputWidth || S.screenInfo.width;
+    const ih = S.screenInfo.inputHeight || S.screenInfo.height;
+    const cx = S.cursorX / iw * canvas.width  * ts + S.panX;
+    const cy = S.cursorY / ih * canvas.height * ts + S.panY;
 
     const mx = bw * EDGE_MARGIN;
     const my = bh * EDGE_MARGIN;

@@ -80,8 +80,11 @@ function connect() {
     console.log('   Waiting for viewer to connect...');
     console.log('');
 
-    // Send screen info
+    // Send screen info (include logical input resolution)
     const screenInfo = capture.getScreenInfo();
+    screenInfo.inputWidth = input.screenWidth;
+    screenInfo.inputHeight = input.screenHeight;
+    console.log(`   📐 Screen: ${screenInfo.width}x${screenInfo.height} capture, ${screenInfo.inputWidth}x${screenInfo.inputHeight} input`);
     socket.emit('screen-info', screenInfo);
   });
 
