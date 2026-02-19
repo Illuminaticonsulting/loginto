@@ -68,6 +68,8 @@
     panelOpen: null,
   };
 
+  let keyboardOpen = false;
+
   // ─── DOM ────────────────────────────────────────────────
   const $ = sel => document.querySelector(sel);
   const $$ = sel => document.querySelectorAll(sel);
@@ -747,6 +749,8 @@
           if (evt === 'mouse-click') pos.button = 'left';
           S.socket?.emit(evt, pos);
           S.lastTapTime = ts;
+          // Auto-pop keyboard on single tap
+          if (!keyboardOpen) openKeyboard();
         }
       }
     }
@@ -966,16 +970,12 @@
 
   // ───────────────────────────────────────────────────────
   //  KEYBOARD MANAGEMENT
-  //  Toggle keyboard visibility; auto-pop on single tap
+  //  Auto-pop keyboard on single tap
   // ───────────────────────────────────────────────────────
-
-  let keyboardOpen = false;
 
   function openKeyboard() {
     keyboardOpen = true;
     document.body.classList.add('keyboard-active');
-    const btn = $('#btn-keyboard');
-    if (btn) btn.classList.add('active');
     // Force layout reflow so browser registers the input as visible/focusable
     void kbInput.offsetHeight;
     kbInput.focus();
@@ -985,8 +985,6 @@
   function closeKeyboard() {
     keyboardOpen = false;
     document.body.classList.remove('keyboard-active');
-    const btn = $('#btn-keyboard');
-    if (btn) btn.classList.remove('active');
     kbInput.blur();
   }
 
@@ -996,18 +994,13 @@
 
   // Close keyboard when input loses focus (user dismissed it)
   kbInput.addEventListener('blur', () => {
-    // Small delay so we don't fight btn-keyboard tap
     setTimeout(() => {
       if (!kbInput.matches(':focus')) {
         keyboardOpen = false;
         document.body.classList.remove('keyboard-active');
-        const btn = $('#btn-keyboard');
-        if (btn) btn.classList.remove('active');
       }
     }, 100);
   });
-
-  on('btn-keyboard', () => { closeAllPanels(); toggleKeyboard(); });
 
   on('btn-more', () => {
     if (S.panelOpen === 'more') closeAllPanels(); else openPanel('more');
