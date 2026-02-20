@@ -507,6 +507,9 @@ code {
   display: flex;
   flex-direction: column;
   background: #000;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
 }
 
 /* Status Bar */
@@ -926,30 +929,24 @@ code {
 
 .keyboard-input {
   position: fixed;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   opacity: 0;
   font-size: 16px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  pointer-events: none;
   z-index: -1;
 }
 
-/* When keyboard is active, show a subtle bar so user knows it's capturing */
+/* When keyboard is active, allow focus but stay invisible */
 .keyboard-active .keyboard-input {
-  width: calc(100% - 32px);
-  max-width: 400px;
-  height: 36px;
-  opacity: 1;
   pointer-events: auto;
-  background: var(--bg-elevated);
-  border: 1px solid var(--accent);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 0 12px;
-  font-family: inherit;
-  outline: none;
   z-index: 200;
 }
 

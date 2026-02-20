@@ -937,10 +937,15 @@
   function openKeyboard() {
     keyboardOpen = true;
     document.body.classList.add('keyboard-active');
-    // Force layout reflow so browser registers the input as visible/focusable
+    // Force layout reflow so browser registers the input as focusable
     void kbInput.offsetHeight;
-    kbInput.focus();
+    // Prevent viewport scroll/jump when focusing the hidden input
+    const scrollX = window.scrollX, scrollY = window.scrollY;
+    kbInput.focus({ preventScroll: true });
     kbInput.click();
+    window.scrollTo(scrollX, scrollY);
+    // Also listen for any async scroll the OS keyboard causes
+    requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
   }
 
   function closeKeyboard() {
