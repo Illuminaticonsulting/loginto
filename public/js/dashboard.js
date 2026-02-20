@@ -1,8 +1,9 @@
 /**
- * LogInTo — Dashboard Logic
+ * LogInTo — Dashboard Logic (Multi-Machine)
  *
- * Shows machine status (online/offline), agent setup instructions,
- * and connect button. Uses Socket.IO for real-time agent status.
+ * Shows all machines with status (online/offline), agent setup instructions,
+ * connect buttons, and machine management (add/rename/delete).
+ * Uses Socket.IO for real-time per-machine status.
  */
 (function() {
   'use strict';
@@ -20,16 +21,11 @@
   // ─── DOM Elements ──────────────────────────────────────
   const userGreeting = document.getElementById('user-greeting');
   const logoutBtn = document.getElementById('logout-btn');
-  const statusDot = document.getElementById('status-dot');
-  const statusLabel = document.getElementById('status-label');
-  const stateOnline = document.getElementById('state-online');
-  const stateOffline = document.getElementById('state-offline');
-  const agentKeyBox = document.getElementById('agent-key-box');
-  const setupCommand = document.getElementById('setup-command');
-  const setupCommandWin = document.getElementById('setup-command-win');
-  const setupCommandOnline = document.getElementById('setup-command-online');
-  const copyFeedback = document.getElementById('copy-feedback');
-  const copyFeedbackOnline = document.getElementById('copy-feedback-online');
+  const container = document.getElementById('machines-container');
+  const addMachineBtn = document.getElementById('btn-add-machine');
+
+  // ─── State ─────────────────────────────────────────────
+  let machines = [];  // [{ id, name, agentKey, connected }]
 
   // ─── Init UI ───────────────────────────────────────────
   userGreeting.textContent = displayName || userId;
@@ -44,96 +40,187 @@
     }
   }).catch(() => {});
 
-  // ─── Load Agent Key & Build Setup Command ───────────────
-  fetch('/api/agent-info/' + userId, {
-    headers: { 'Authorization': 'Bearer ' + token }
-  }).then(res => res.json())
-    .then(data => {
-      if (data.agentKey) {
-        agentKeyBox.textContent = data.agentKey;
-        const cmd = `curl -sL "${location.origin}/api/setup/${data.agentKey}" | bash`;
-        const cmdWin = `powershell -ExecutionPolicy Bypass -Command "irm '${location.origin}/api/setup-win/${data.agentKey}' | iex"`;
-        setupCommand.textContent = cmd;
-        if (setupCommandWin) setupCommandWin.textContent = cmdWin;
-        if (setupCommandOnline) setupCommandOnline.textContent = cmd;
-      }
-    }).catch(() => {
-      agentKeyBox.textContent = 'Error loading key';
-      setupCommand.textContent = 'Error loading setup command';
+  // ─── Load Machines ─────────────────────────────────────
+  function loadMachines() {
+    fetch('/api/machines/' + userId, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(res => res.json())
+      .then(data => {
+        machines = (data.machines || []).map(m => ({
+          ...m,
+          connected: m.connected || false
+        }));
+        renderMachines();
+      }).catch(() => {
+        container.innerHTML = '<p class="text-muted" style="text-align:center;padding:40px 0;">Error loading machines</p>';
+      });
+  }
+
+  // ─── Render Machine Cards ──────────────────────────────
+  function renderMachines() {
+    if (machines.length === 0) {
+      container.innerHTML = `
+        <div class="machine-card" style="text-align:center; padding: 40px 20px;">
+          <p class="text-muted">No machines yet. Add one to get started.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = machines.map(m => {
+      const online = m.connected;
+      const macCmd = `curl -sL "${location.origin}/api/setup/${m.agentKey}" | bash`;
+      const winCmd = `powershell -ExecutionPolicy Bypass -Command "irm '${location.origin}/api/setup-win/${m.agentKey}' | iex"`;
+
+      return `
+        <div class="machine-card" data-machine-id="${m.id}">
+          <div class="machine-card-header">
+            <div class="machine-status">
+              <span class="dot ${online ? 'online' : 'offline'}"></span>
+              <span class="machine-name" title="${m.name}">${m.name}</span>
+              <span class="machine-status-label">${online ? 'Online' : 'Offline'}</span>
+            </div>
+            <div class="machine-actions">
+              <button class="btn-icon btn-rename" data-id="${m.id}" title="Rename">✏️</button>
+              <button class="btn-icon btn-delete" data-id="${m.id}" title="Delete">🗑️</button>
+            </div>
+          </div>
+
+          ${online ? `
+            <div class="machine-body">
+              <a href="/viewer.html?machine=${m.id}" class="btn-primary btn-connect">Connect</a>
+              <details class="advanced-toggle" style="margin-top: 16px;">
+                <summary class="text-muted text-sm">Setup command</summary>
+                <div class="setup-tabs-mini">
+                  <button class="os-tab-mini active" data-os="mac" data-mid="${m.id}">Mac/Linux</button>
+                  <button class="os-tab-mini" data-os="win" data-mid="${m.id}">Windows</button>
+                </div>
+                <div class="setup-panel-mac-${m.id} setup-panel-mini active">
+                  <div class="code-block setup-oneliner copy-cmd" title="Click to copy">${macCmd}</div>
+                </div>
+                <div class="setup-panel-win-${m.id} setup-panel-mini">
+                  <div class="code-block setup-oneliner copy-cmd" title="Click to copy">${winCmd}</div>
+                </div>
+              </details>
+            </div>
+          ` : `
+            <div class="machine-body">
+              <p class="text-muted text-sm" style="margin-bottom: 12px;">Agent not connected. Run the setup command on your computer:</p>
+              <div class="setup-tabs-mini">
+                <button class="os-tab-mini active" data-os="mac" data-mid="${m.id}">Mac/Linux</button>
+                <button class="os-tab-mini" data-os="win" data-mid="${m.id}">Windows</button>
+              </div>
+              <div class="setup-panel-mac-${m.id} setup-panel-mini active">
+                <div class="code-block setup-oneliner copy-cmd" title="Click to copy">${macCmd}</div>
+              </div>
+              <div class="setup-panel-win-${m.id} setup-panel-mini">
+                <div class="code-block setup-oneliner copy-cmd" title="Click to copy">${winCmd}</div>
+              </div>
+              <p class="text-muted text-sm" style="margin-top: 8px;">Keep the terminal open. Status will switch to <span class="text-success">● Online</span>.</p>
+            </div>
+          `}
+        </div>`;
+    }).join('');
+
+    // ─── Wire up machine card events ───
+    // OS tab switching
+    container.querySelectorAll('.os-tab-mini').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const mid = tab.dataset.mid;
+        const card = tab.closest('.machine-card');
+        card.querySelectorAll('.os-tab-mini').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const macPanel = card.querySelector('.setup-panel-mac-' + mid);
+        const winPanel = card.querySelector('.setup-panel-win-' + mid);
+        if (tab.dataset.os === 'win') {
+          if (macPanel) macPanel.classList.remove('active');
+          if (winPanel) winPanel.classList.add('active');
+        } else {
+          if (winPanel) winPanel.classList.remove('active');
+          if (macPanel) macPanel.classList.add('active');
+        }
+      });
     });
 
-  // Copy setup command on click
-  setupCommand.addEventListener('click', () => {
-    const text = setupCommand.textContent;
-    if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
-      navigator.clipboard.writeText(text).then(() => {
-        copyFeedback.style.display = 'block';
-        setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
-      }).catch(() => {
-        const range = document.createRange();
-        range.selectNodeContents(setupCommand);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+    // Copy commands
+    container.querySelectorAll('.copy-cmd').forEach(el => {
+      el.addEventListener('click', () => {
+        const text = el.textContent;
+        if (text && !text.startsWith('Loading')) {
+          navigator.clipboard.writeText(text).then(() => {
+            const orig = el.textContent;
+            el.textContent = '✅ Copied!';
+            setTimeout(() => { el.textContent = orig; }, 1500);
+          }).catch(() => {});
+        }
       });
-    }
-  });
+    });
 
-  // Copy Windows setup command on click
-  if (setupCommandWin) {
-    setupCommandWin.addEventListener('click', () => {
-      const text = setupCommandWin.textContent;
-      if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
-        navigator.clipboard.writeText(text).then(() => {
-          copyFeedback.style.display = 'block';
-          setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
-        }).catch(() => {});
-      }
+    // Rename buttons
+    container.querySelectorAll('.btn-rename').forEach(btn => {
+      btn.addEventListener('click', () => renameMachine(btn.dataset.id));
+    });
+
+    // Delete buttons
+    container.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.addEventListener('click', () => deleteMachine(btn.dataset.id));
     });
   }
 
-  // OS tab switching (Mac/Linux vs Windows)
-  document.querySelectorAll('.os-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.setup-os-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      const os = tab.dataset.os;
-      const panel = document.getElementById(os === 'win' ? 'setup-win' : 'setup-mac');
-      if (panel) panel.classList.add('active');
-    });
+  // ─── Add Machine ──────────────────────────────────────
+  addMachineBtn.addEventListener('click', () => {
+    const name = prompt('Machine name:', 'My Computer');
+    if (!name) return;
+    fetch('/api/machines/' + userId, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name })
+    }).then(res => res.json())
+      .then(data => {
+        if (data.machine) {
+          machines.push({ ...data.machine, connected: false });
+          renderMachines();
+        }
+      }).catch(() => alert('Error adding machine'));
   });
 
-  // Copy agent key on click
-  agentKeyBox.addEventListener('click', () => {
-    const key = agentKeyBox.textContent;
-    if (key && key !== 'Loading...' && key !== 'Error loading key') {
-      navigator.clipboard.writeText(key).then(() => {
-        copyFeedback.style.display = 'block';
-        setTimeout(() => { copyFeedback.style.display = 'none'; }, 2000);
-      }).catch(() => {
-        const range = document.createRange();
-        range.selectNodeContents(agentKeyBox);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-      });
-    }
-  });
-
-  // Copy online setup command on click
-  if (setupCommandOnline) {
-    setupCommandOnline.addEventListener('click', () => {
-      const text = setupCommandOnline.textContent;
-      if (text && !text.startsWith('Loading') && !text.startsWith('Error')) {
-        navigator.clipboard.writeText(text).then(() => {
-          if (copyFeedbackOnline) {
-            copyFeedbackOnline.style.display = 'block';
-            setTimeout(() => { copyFeedbackOnline.style.display = 'none'; }, 2000);
-          }
-        }).catch(() => {});
+  // ─── Rename Machine ──────────────────────────────────
+  function renameMachine(machineId) {
+    const m = machines.find(x => x.id === machineId);
+    if (!m) return;
+    const newName = prompt('Rename machine:', m.name);
+    if (!newName || newName === m.name) return;
+    fetch(`/api/machines/${userId}/${machineId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name: newName })
+    }).then(res => {
+      if (res.ok) {
+        m.name = newName;
+        renderMachines();
       }
-    });
+    }).catch(() => alert('Error renaming machine'));
+  }
+
+  // ─── Delete Machine ──────────────────────────────────
+  function deleteMachine(machineId) {
+    const m = machines.find(x => x.id === machineId);
+    if (!m) return;
+    if (!confirm(`Delete "${m.name}"? This will disconnect the agent.`)) return;
+    fetch(`/api/machines/${userId}/${machineId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(res => {
+      if (res.ok) {
+        machines = machines.filter(x => x.id !== machineId);
+        renderMachines();
+      }
+    }).catch(() => alert('Error deleting machine'));
   }
 
   // ─── Real-Time Status via Socket.IO ────────────────────
@@ -144,11 +231,25 @@
   });
 
   socket.on('connect', () => {
-    // Status will come via agent-status event
+    // Initial machine-status events will come from server
   });
 
+  // Per-machine status updates
+  socket.on('machine-status', (data) => {
+    const m = machines.find(x => x.id === data.machineId);
+    if (m) {
+      m.connected = data.connected;
+      renderMachines();
+    }
+  });
+
+  // Legacy compat (single-machine agent-status)
   socket.on('agent-status', (data) => {
-    updateStatus(data.connected);
+    // If only one machine, update it
+    if (machines.length === 1) {
+      machines[0].connected = data.connected;
+      renderMachines();
+    }
   });
 
   socket.on('connect_error', (err) => {
@@ -158,26 +259,26 @@
     }
   });
 
-  function updateStatus(online) {
-    statusDot.className = 'dot ' + (online ? 'online' : 'offline');
-    statusLabel.textContent = online ? 'Online' : 'Offline';
-    stateOnline.style.display = online ? 'block' : 'none';
-    stateOffline.style.display = online ? 'none' : 'block';
-  }
-
-  // Also poll as backup (in case socket disconnects)
+  // Poll as backup
   setInterval(() => {
-    fetch('/api/user-status/' + userId, {
+    fetch('/api/machines/' + userId, {
       headers: { 'Authorization': 'Bearer ' + token }
     }).then(res => res.json())
       .then(data => {
-        updateStatus(data.agentConnected);
+        if (data.machines) {
+          for (const m of data.machines) {
+            const existing = machines.find(x => x.id === m.id);
+            if (existing && existing.connected !== m.connected) {
+              existing.connected = m.connected;
+            }
+          }
+          renderMachines();
+        }
       }).catch(() => {});
   }, 10000);
 
   // ─── Logout ────────────────────────────────────────────
   logoutBtn.addEventListener('click', () => {
-    // Invalidate server-side session, then clear local state
     fetch('/api/logout', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -187,5 +288,8 @@
       window.location.href = '/';
     });
   });
+
+  // ─── Initial Load ─────────────────────────────────────
+  loadMachines();
 
 })();

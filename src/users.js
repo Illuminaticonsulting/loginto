@@ -3,7 +3,7 @@
  *
  * JSON file-based user management.
  * Password IS the identity — no usernames needed.
- * Each user gets a unique agentKey for their desktop agent.
+ * Each user can have multiple machines, each with a unique agentKey.
  */
 
 const fs = require('fs');
@@ -30,6 +30,21 @@ class UserStore {
     if (fs.existsSync(USERS_FILE)) {
       const data = fs.readFileSync(USERS_FILE, 'utf8');
       this.users = JSON.parse(data);
+      // Migrate: convert legacy single agentKey → machines array
+      let migrated = false;
+      for (const user of this.users) {
+        if (user.agentKey && !user.machines) {
+          user.machines = [
+            { id: 'm1', name: 'My Laptop', agentKey: user.agentKey }
+          ];
+          delete user.agentKey;
+          migrated = true;
+        }
+        if (!user.machines) {
+          user.machines = [];
+        }
+      }
+      if (migrated) this._save();
       console.log(`👥 Loaded ${this.users.length} users`);
     } else {
       await this._seed();
@@ -47,13 +62,13 @@ class UserStore {
         id: 'kingpin',
         displayName: 'Kingpin',
         passwordHash: await bcrypt.hash('kingpin', 12),
-        agentKey: uuidv4()
+        machines: [{ id: 'm1', name: 'My Laptop', agentKey: uuidv4() }]
       },
       {
         id: 'tez',
         displayName: 'Tez',
         passwordHash: await bcrypt.hash('tez', 12),
-        agentKey: uuidv4()
+        machines: [{ id: 'm1', name: 'My Laptop', agentKey: uuidv4() }]
       }
     ];
 
@@ -71,16 +86,12 @@ class UserStore {
 
   /**
    * Authenticate by password (password IS the identity)
-   * Returns user object (without sensitive fields) or null
    */
   async authenticateByPassword(password) {
     for (const user of this.users) {
       const match = await bcrypt.compare(password, user.passwordHash);
       if (match) {
-        return {
-          id: user.id,
-          displayName: user.displayName
-        };
+        return { id: user.id, displayName: user.displayName };
       }
     }
     return null;
@@ -88,15 +99,21 @@ class UserStore {
 
   /**
    * Authenticate a desktop agent by its key
-   * Returns user object or null
+   * Returns user + machine info, or null
    */
   getByAgentKey(agentKey) {
-    const user = this.users.find(u => u.agentKey === agentKey);
-    if (!user) return null;
-    return {
-      id: user.id,
-      displayName: user.displayName
-    };
+    for (const user of this.users) {
+      const machine = (user.machines || []).find(m => m.agentKey === agentKey);
+      if (machine) {
+        return {
+          id: user.id,
+          displayName: user.displayName,
+          machineId: machine.id,
+          machineName: machine.name
+        };
+      }
+    }
+    return null;
   }
 
   /**
@@ -105,18 +122,81 @@ class UserStore {
   getById(id) {
     const user = this.users.find(u => u.id === id);
     if (!user) return null;
-    return {
-      id: user.id,
-      displayName: user.displayName
-    };
+    return { id: user.id, displayName: user.displayName };
   }
 
   /**
-   * Get agent key for a specific user (shown on dashboard)
+   * Get all machines for a user
+   */
+  getMachines(userId) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return [];
+    return (user.machines || []).map(m => ({
+      id: m.id,
+      name: m.name,
+      agentKey: m.agentKey
+    }));
+  }
+
+  /**
+   * Get a specific machine for a user
+   */
+  getMachine(userId, machineId) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return null;
+    return (user.machines || []).find(m => m.id === machineId) || null;
+  }
+
+  /**
+   * Add a new machine for a user
+   */
+  addMachine(userId, name) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return null;
+    if (!user.machines) user.machines = [];
+    const nextNum = user.machines.length + 1;
+    const machine = {
+      id: 'm' + Date.now(),
+      name: name || `Machine ${nextNum}`,
+      agentKey: uuidv4()
+    };
+    user.machines.push(machine);
+    this._save();
+    return machine;
+  }
+
+  /**
+   * Remove a machine
+   */
+  removeMachine(userId, machineId) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user || !user.machines) return false;
+    const idx = user.machines.findIndex(m => m.id === machineId);
+    if (idx === -1) return false;
+    user.machines.splice(idx, 1);
+    this._save();
+    return true;
+  }
+
+  /**
+   * Rename a machine
+   */
+  renameMachine(userId, machineId, newName) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user || !user.machines) return false;
+    const machine = user.machines.find(m => m.id === machineId);
+    if (!machine) return false;
+    machine.name = newName;
+    this._save();
+    return true;
+  }
+
+  /**
+   * Legacy compat — get first agent key for a user
    */
   getAgentKey(userId) {
-    const user = this.users.find(u => u.id === userId);
-    return user ? user.agentKey : null;
+    const machines = this.getMachines(userId);
+    return machines.length > 0 ? machines[0].agentKey : null;
   }
 
   /**

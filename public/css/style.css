@@ -289,22 +289,152 @@ code {
 }
 
 /* Machine Card */
+.machines-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .machine-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 32px;
-  text-align: center;
+  padding: 24px;
+  text-align: left;
+}
+
+.machine-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .machine-status {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 10px;
-  margin-bottom: 24px;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+}
+
+.machine-name {
+  color: var(--text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-status-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.machine-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  opacity: 1;
+  background: var(--bg-elevated);
+}
+
+.machine-body {
+  padding-top: 4px;
+}
+
+.machine-body .btn-connect {
+  display: inline-block;
+  width: auto;
+  padding: 12px 36px;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+/* Add Machine Button */
+.btn-add-machine {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  margin-top: 16px;
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btn-add-machine:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Mini OS tabs (per-machine card) */
+.setup-tabs-mini {
+  display: flex;
+  gap: 0;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.os-tab-mini {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.os-tab-mini:first-child {
+  border-radius: var(--radius-sm) 0 0 0;
+  border-right: none;
+}
+
+.os-tab-mini:last-child {
+  border-radius: 0 var(--radius-sm) 0 0;
+}
+
+.os-tab-mini.active {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  border-bottom-color: var(--bg-elevated);
+}
+
+.setup-panel-mini {
+  display: none;
+}
+
+.setup-panel-mini.active {
+  display: block;
+}
+
+.setup-panel-mini .code-block {
+  margin-top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-top: none;
 }
 
 .dot {

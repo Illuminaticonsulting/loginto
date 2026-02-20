@@ -68,7 +68,7 @@ const loginLimiter = rateLimit({
 
 // ─── State ───────────────────────────────────────────────
 const sessions = new Map();  // token → { userId, created, lastActive }
-const agents = new Map();    // userId → { socket, screenInfo, connected }
+const agents = new Map();    // agentKey → { socket, screenInfo, connected, userId, machineId, machineName }
 // Viewers now tracked via Socket.IO rooms: `viewers:${userId}`
 // No Map needed — rooms handle multi-viewer broadcast efficiently
 
@@ -161,26 +161,88 @@ app.get('/api/session', (req, res) => {
   res.json({ valid: true, userId: session.userId, displayName: user?.displayName });
 });
 
-// Agent status
+// Agent status — now returns all machines with status
 app.get('/api/user-status/:userId', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
   const session = getSession(token);
   if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
 
-  const agent = agents.get(req.params.userId);
-  res.json({ agentConnected: agent?.connected || false });
+  const machines = users.getMachines(req.params.userId);
+  const result = machines.map(m => ({
+    id: m.id,
+    name: m.name,
+    connected: agents.get(m.agentKey)?.connected || false
+  }));
+  // Legacy compat
+  const anyConnected = result.some(m => m.connected);
+  res.json({ agentConnected: anyConnected, machines: result });
 });
 
-// Agent key
+// Machines list
+app.get('/api/machines/:userId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const machines = users.getMachines(req.params.userId);
+  const result = machines.map(m => ({
+    ...m,
+    connected: agents.get(m.agentKey)?.connected || false
+  }));
+  res.json({ machines: result });
+});
+
+// Add machine
+app.post('/api/machines/:userId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const { name } = req.body;
+  const machine = users.addMachine(req.params.userId, name || 'New Machine');
+  if (!machine) return res.status(400).json({ error: 'Could not add machine' });
+  res.json({ machine });
+});
+
+// Delete machine
+app.delete('/api/machines/:userId/:machineId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const ok = users.removeMachine(req.params.userId, req.params.machineId);
+  if (!ok) return res.status(404).json({ error: 'Machine not found' });
+  res.json({ ok: true });
+});
+
+// Rename machine
+app.patch('/api/machines/:userId/:machineId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const ok = users.renameMachine(req.params.userId, req.params.machineId, name);
+  if (!ok) return res.status(404).json({ error: 'Machine not found' });
+  res.json({ ok: true });
+});
+
+// Agent key — returns all machines
 app.get('/api/agent-info/:userId', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
   const session = getSession(token);
   if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
 
-  const agentKey = users.getAgentKey(req.params.userId);
-  res.json({ agentKey });
+  const machines = users.getMachines(req.params.userId);
+  // Legacy compat: also return first agentKey
+  res.json({ agentKey: machines[0]?.agentKey || null, machines });
 });
 
 // Setup script — one-liner install for desktop agent
@@ -418,6 +480,9 @@ io.use((socket, next) => {
     if (!user) return next(new Error('Invalid agent key'));
     socket.userId = user.id;
     socket.displayName = user.displayName;
+    socket.agentKey = agentKey;
+    socket.machineId = user.machineId;
+    socket.machineName = user.machineName;
     socket.role = 'agent';
     next();
   } else {
@@ -425,71 +490,97 @@ io.use((socket, next) => {
     const session = getSession(token);
     socket.userId = session.userId;
     socket.role = role || 'viewer';
+    // Viewer specifies which machine to connect to
+    socket.machineId = socket.handshake.auth.machineId || null;
     next();
   }
 });
 
 // ─── Room helpers ────────────────────────────────────────
-// Room naming: "viewers:<userId>" for all viewers of a user
-//              "user:<userId>" for all sockets (viewers + dashboards) of a user
-function viewerRoom(userId) { return `viewers:${userId}`; }
-function userRoom(userId)   { return `user:${userId}`; }
+function viewerRoom(agentKey) { return `viewers:${agentKey}`; }
+function userRoom(userId)     { return `user:${userId}`; }
 
 // ─── Socket.IO Connection Handler ────────────────────────
 io.on('connection', (socket) => {
 
   // ═══ AGENT ═══
   if (socket.role === 'agent') {
-    console.log(`🖥️  Agent online: ${socket.displayName}`);
+    console.log(`🖥️  Agent online: ${socket.displayName} — ${socket.machineName}`);
 
-    const existing = agents.get(socket.userId);
+    const existing = agents.get(socket.agentKey);
     if (existing?.connected) {
-      existing.socket.emit('kicked', { reason: 'Another agent connected' });
+      existing.socket.emit('kicked', { reason: 'Another agent connected for this machine' });
       existing.socket.disconnect();
     }
 
-    agents.set(socket.userId, { socket, screenInfo: null, connected: true });
+    agents.set(socket.agentKey, {
+      socket,
+      screenInfo: null,
+      connected: true,
+      userId: socket.userId,
+      machineId: socket.machineId,
+      machineName: socket.machineName
+    });
 
-    // Notify all viewers/dashboards for this user via room
-    io.to(userRoom(socket.userId)).emit('agent-status', { connected: true });
+    // Notify viewers watching this machine + dashboard
+    io.to(viewerRoom(socket.agentKey)).emit('agent-status', { connected: true });
+    io.to(userRoom(socket.userId)).emit('machine-status', {
+      machineId: socket.machineId, connected: true
+    });
 
     socket.on('screen-info', (info) => {
-      const agent = agents.get(socket.userId);
+      const agent = agents.get(socket.agentKey);
       if (agent) agent.screenInfo = info;
-      io.to(viewerRoom(socket.userId)).emit('screen-info', info);
+      io.to(viewerRoom(socket.agentKey)).emit('screen-info', info);
     });
 
     // Frame relay — uses volatile + room broadcast (O(1) lookup instead of O(n) forEach)
     socket.on('frame', (frameData) => {
-      io.to(viewerRoom(socket.userId)).volatile.emit('frame', frameData);
+      io.to(viewerRoom(socket.agentKey)).volatile.emit('frame', frameData);
     });
 
     // Relay displays-list from agent → viewers
     socket.on('displays-list', (displays) => {
-      io.to(viewerRoom(socket.userId)).emit('displays-list', displays);
+      io.to(viewerRoom(socket.agentKey)).emit('displays-list', displays);
     });
 
     // Relay clipboard-content from agent → viewers
     socket.on('clipboard-content', (data) => {
-      io.to(viewerRoom(socket.userId)).emit('clipboard-content', data);
+      io.to(viewerRoom(socket.agentKey)).emit('clipboard-content', data);
     });
 
     socket.on('disconnect', () => {
-      console.log(`🖥️  Agent offline: ${socket.displayName || socket.userId}`);
-      agents.delete(socket.userId);
-      io.to(userRoom(socket.userId)).emit('agent-status', { connected: false });
+      console.log(`🖥️  Agent offline: ${socket.displayName} — ${socket.machineName || socket.agentKey}`);
+      agents.delete(socket.agentKey);
+      io.to(viewerRoom(socket.agentKey)).emit('agent-status', { connected: false });
+      io.to(userRoom(socket.userId)).emit('machine-status', {
+        machineId: socket.machineId, connected: false
+      });
     });
   }
 
   // ═══ VIEWER ═══
   else if (socket.role === 'viewer') {
-    console.log(`📱 Viewer connected: ${socket.userId}`);
+    // Resolve agentKey from machineId
+    let agentKey = null;
+    if (socket.machineId) {
+      const machine = users.getMachine(socket.userId, socket.machineId);
+      if (machine) agentKey = machine.agentKey;
+    }
+    if (!agentKey) {
+      // Fallback: use first machine's agentKey (legacy / single-machine compat)
+      const machines = users.getMachines(socket.userId);
+      if (machines.length > 0) agentKey = machines[0].agentKey;
+    }
 
-    // Join rooms (supports multiple concurrent viewers per user)
-    socket.join(viewerRoom(socket.userId));
+    socket.agentKey = agentKey;
+    console.log(`📱 Viewer connected: ${socket.userId} → machine ${socket.machineId || 'default'}`);
+
+    // Join rooms (supports multiple concurrent viewers per machine)
+    if (agentKey) socket.join(viewerRoom(agentKey));
     socket.join(userRoom(socket.userId));
 
-    const agent = agents.get(socket.userId);
+    const agent = agentKey ? agents.get(agentKey) : null;
     if (agent?.connected) {
       socket.emit('agent-status', { connected: true });
       agent.socket.emit('start-streaming');
@@ -512,58 +603,58 @@ io.on('connection', (socket) => {
       socket.on(event, (data) => {
         if (!validMouse(data)) return;
         if (data.button && !validButton(data.button)) return;
-        const agent = agents.get(socket.userId);
+        const agent = socket.agentKey ? agents.get(socket.agentKey) : null;
         if (agent?.connected) agent.socket.emit(event, data);
       });
     });
 
     socket.on('mouse-scroll', (data) => {
       if (!validScroll(data)) return;
-      const agent = agents.get(socket.userId);
+      const agent = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (agent?.connected) agent.socket.emit('mouse-scroll', data);
     });
 
     socket.on('key-press', (data) => {
       if (!validKey(data)) return;
       if (data.modifiers && !Array.isArray(data.modifiers)) return;
-      const agent = agents.get(socket.userId);
+      const agent = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (agent?.connected) agent.socket.emit('key-press', data);
     });
 
     socket.on('key-type', (data) => {
       if (!data || typeof data.text !== 'string' || data.text.length > 500) return;
-      const agent = agents.get(socket.userId);
+      const agent = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (agent?.connected) agent.socket.emit('key-type', data);
     });
 
     socket.on('update-quality', (data) => {
       if (!data || typeof data.quality !== 'number' || data.quality < 10 || data.quality > 100) return;
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('update-quality', data);
     });
     socket.on('update-fps', (data) => {
       if (!data || typeof data.fps !== 'number' || data.fps < 1 || data.fps > 60) return;
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('update-fps', data);
     });
 
     // Multi-monitor
     socket.on('list-screens', () => {
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('list-screens');
     });
     socket.on('switch-screen', (data) => {
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('switch-screen', data);
     });
 
     // Clipboard sync
     socket.on('clipboard-write', (data) => {
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('clipboard-write', data);
     });
     socket.on('clipboard-read', () => {
-      const a = agents.get(socket.userId);
+      const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('clipboard-read');
     });
 
@@ -576,10 +667,12 @@ io.on('connection', (socket) => {
       console.log(`📱 Viewer disconnected: ${socket.userId}`);
       // Room membership auto-cleaned by Socket.IO on disconnect
       // Stop streaming only if no viewers left in the room
-      const room = io.sockets.adapter.rooms.get(viewerRoom(socket.userId));
-      if (!room || room.size === 0) {
-        const agent = agents.get(socket.userId);
-        if (agent?.connected) agent.socket.emit('stop-streaming');
+      if (socket.agentKey) {
+        const room = io.sockets.adapter.rooms.get(viewerRoom(socket.agentKey));
+        if (!room || room.size === 0) {
+          const agent = agents.get(socket.agentKey);
+          if (agent?.connected) agent.socket.emit('stop-streaming');
+        }
       }
     });
   }
@@ -587,8 +680,15 @@ io.on('connection', (socket) => {
   // ═══ DASHBOARD (lightweight status listener) ═══
   else if (socket.role === 'dashboard') {
     socket.join(userRoom(socket.userId));
-    const agent = agents.get(socket.userId);
-    socket.emit('agent-status', { connected: agent?.connected || false });
+    // Send initial status for all machines
+    const machines = users.getMachines(socket.userId);
+    for (const m of machines) {
+      const agent = agents.get(m.agentKey);
+      socket.emit('machine-status', {
+        machineId: m.id,
+        connected: agent?.connected || false
+      });
+    }
     socket.on('disconnect', () => { /* room auto-cleaned */ });
   }
 });

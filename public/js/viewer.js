@@ -16,6 +16,10 @@
   const userId = localStorage.getItem('loginto_userId');
   if (!token || !userId) { window.location.href = '/'; return; }
 
+  // Get machineId from URL params (e.g., /viewer.html?machine=m1)
+  const urlParams = new URLSearchParams(window.location.search);
+  const machineId = urlParams.get('machine') || null;
+
   // ─── Constants ──────────────────────────────────────────
   const TRACKPAD_SPEED = 1.8;
   const SCROLL_SPEED = 3;
@@ -158,7 +162,7 @@
 
   function initSocket() {
     S.socket = io({
-      auth: { token, role: 'viewer' },
+      auth: { token, role: 'viewer', machineId },
       reconnection: true, reconnectionDelay: 1000,
       reconnectionDelayMax: 5000, reconnectionAttempts: Infinity,
       transports: ['websocket', 'polling'],
