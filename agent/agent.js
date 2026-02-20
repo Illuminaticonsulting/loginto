@@ -255,6 +255,7 @@ function connect() {
 process.on('SIGINT', () => {
   console.log('\n   Shutting down...');
   stopSleepPrevention();
+  input.destroy();
   capture.stopStreaming();
   if (socket) socket.disconnect();
   process.exit(0);
@@ -262,6 +263,7 @@ process.on('SIGINT', () => {
 
 process.on('SIGTERM', () => {
   stopSleepPrevention();
+  input.destroy();
   capture.stopStreaming();
   if (socket) socket.disconnect();
   process.exit(0);
