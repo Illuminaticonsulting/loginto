@@ -114,7 +114,7 @@
                 </div>
                 <div class="setup-panel-win-${m.id}-svc setup-panel-mini">
                   <div class="code-block copy-cmd" style="font-size:12px;" title="Click to copy">cd %USERPROFILE%\\loginto-agent &amp;&amp; node install-service.js</div>
-                  <p class="text-muted text-sm" style="margin-top:6px;">Run in a terminal as Administrator. Creates a Task Scheduler entry that starts at every logon.</p>
+                  <p class="text-muted text-sm" style="margin-top:6px;">Run in a terminal <strong>as Administrator</strong> (right-click &gt; Run as administrator). Creates a Task Scheduler entry that starts at every logon.</p>
                 </div>
               </details>
             </div>
@@ -158,7 +158,7 @@
                 </div>
                 <div class="setup-panel-win-${m.id}-svc setup-panel-mini">
                   <div class="code-block copy-cmd" style="font-size:12px;" title="Click to copy">cd %USERPROFILE%\\loginto-agent &amp;&amp; node install-service.js</div>
-                  <p class="text-muted text-sm" style="margin-top:6px;">Run in a terminal as Administrator. Creates a Task Scheduler entry that starts at every logon.</p>
+                  <p class="text-muted text-sm" style="margin-top:6px;">Run in a terminal <strong>as Administrator</strong> (right-click &gt; Run as administrator). Creates a Task Scheduler entry that starts at every logon.</p>
                 </div>
               </details>
             </div>
