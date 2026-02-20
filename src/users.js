@@ -134,7 +134,9 @@ class UserStore {
     return (user.machines || []).map(m => ({
       id: m.id,
       name: m.name,
-      agentKey: m.agentKey
+      agentKey: m.agentKey,
+      macAddress: m.macAddress || null,
+      broadcastAddress: m.broadcastAddress || null
     }));
   }
 
@@ -187,6 +189,29 @@ class UserStore {
     const machine = user.machines.find(m => m.id === machineId);
     if (!machine) return false;
     machine.name = newName;
+    this._save();
+    return true;
+  }
+
+  /**
+   * Set or clear Wake-on-LAN MAC address for a machine.
+   * Pass null/empty macAddress to remove WoL config.
+   */
+  setMacAddress(userId, machineId, macAddress, broadcastAddress) {
+    const user = this.users.find(u => u.id === userId);
+    if (!user || !user.machines) return false;
+    const machine = user.machines.find(m => m.id === machineId);
+    if (!machine) return false;
+    if (macAddress) {
+      machine.macAddress = macAddress;
+    } else {
+      delete machine.macAddress;
+    }
+    if (broadcastAddress) {
+      machine.broadcastAddress = broadcastAddress;
+    } else {
+      delete machine.broadcastAddress;
+    }
     this._save();
     return true;
   }

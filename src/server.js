@@ -21,6 +21,7 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const users = require('./users');
+const wol = require('wol');
 
 // ─── Config ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3456;
@@ -62,6 +63,15 @@ const loginLimiter = rateLimit({
   windowMs: LOCKOUT_MINUTES * 60 * 1000,
   max: MAX_LOGIN_ATTEMPTS,
   message: { error: `Too many login attempts. Try again in ${LOCKOUT_MINUTES} minutes.` },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Rate limit Wake-on-LAN — prevents UDP broadcast spam
+const wakeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Too many wake attempts. Wait a minute.' },
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -293,7 +303,7 @@ cat > package.json << 'PKGJSON'
   "version": "1.0.0",
   "description": "LogInTo Desktop Agent",
   "main": "agent.js",
-  "scripts": { "start": "node agent.js" },
+  "scripts": { "start": "node agent.js", "install-service": "node install-service.js" },
   "dependencies": {
     "dotenv": "^16.4.1",
     "screenshot-desktop": "^1.12.7",
@@ -315,9 +325,10 @@ ENVFILE
 
 # Download agent files from server
 echo "📥 Downloading agent files..."
-curl -sfL "${serverURL}/agent-files/agent.js"  -o agent.js
-curl -sfL "${serverURL}/agent-files/capture.js" -o capture.js
-curl -sfL "${serverURL}/agent-files/input.js"   -o input.js
+curl -sfL "${serverURL}/agent-files/agent.js"           -o agent.js
+curl -sfL "${serverURL}/agent-files/capture.js"          -o capture.js
+curl -sfL "${serverURL}/agent-files/input.js"            -o input.js
+curl -sfL "${serverURL}/agent-files/install-service.js"  -o install-service.js
 
 # Install dependencies
 echo "📦 Installing dependencies (this may take a minute)..."
@@ -392,7 +403,7 @@ Write-Host "[OK] Agent directory: $agentDir" -ForegroundColor Green
   "version": "1.0.0",
   "description": "LogInTo Desktop Agent",
   "main": "agent.js",
-  "scripts": { "start": "node agent.js" },
+  "scripts": { "start": "node agent.js", "install-service": "node install-service.js" },
   "dependencies": {
     "dotenv": "^16.4.1",
     "screenshot-desktop": "^1.12.7",
@@ -413,9 +424,10 @@ CAPTURE_SCALE=1.0
 
 # Download agent files
 Write-Host "Downloading agent files..." -ForegroundColor Yellow
-Invoke-WebRequest -Uri "${serverURL}/agent-files/agent.js"  -OutFile "agent.js"  -UseBasicParsing
-Invoke-WebRequest -Uri "${serverURL}/agent-files/capture.js" -OutFile "capture.js" -UseBasicParsing
-Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"   -OutFile "input.js"   -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/agent.js"           -OutFile "agent.js"           -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/capture.js"          -OutFile "capture.js"          -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/input.js"            -OutFile "input.js"            -UseBasicParsing
+Invoke-WebRequest -Uri "${serverURL}/agent-files/install-service.js"  -OutFile "install-service.js"  -UseBasicParsing
 
 # Clean any broken sharp install and reinstall everything
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
@@ -464,6 +476,75 @@ app.use('/agent-files', express.static(path.join(__dirname, '..', 'agent'), {
   dotfiles: 'ignore',
   extensions: ['js']
 }));
+
+// ─── Wake-on-LAN ─────────────────────────────────────────
+
+// Send WoL magic packet to wake a sleeping machine
+app.post('/api/machines/:userId/:machineId/wake', wakeLimiter, async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const machine = users.getMachine(req.params.userId, req.params.machineId);
+  if (!machine) return res.status(404).json({ error: 'Machine not found' });
+  if (!machine.macAddress) {
+    return res.status(400).json({ error: 'No MAC address configured for this machine' });
+  }
+
+  // Already online — no need to wake
+  const agent = agents.get(machine.agentKey);
+  if (agent?.connected) {
+    return res.json({ ok: true, alreadyOnline: true, message: 'Machine is already online' });
+  }
+
+  const broadcastAddress = machine.broadcastAddress || '255.255.255.255';
+
+  try {
+    await new Promise((resolve, reject) => {
+      wol.wake(machine.macAddress, { address: broadcastAddress, port: 9 }, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log(`WoL: magic packet sent to ${machine.macAddress} via ${broadcastAddress}`);
+    res.json({ ok: true, message: `Wake-on-LAN packet sent to ${machine.macAddress}` });
+  } catch (err) {
+    console.error('WoL error:', err);
+    res.status(500).json({ error: 'Failed to send WoL packet: ' + err.message });
+  }
+});
+
+// Set or clear Wake-on-LAN MAC address for a machine
+app.patch('/api/machines/:userId/:machineId/mac', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const { macAddress, broadcastAddress } = req.body;
+
+  if (macAddress) {
+    const macRegex = /^([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}$/;
+    if (!macRegex.test(macAddress)) {
+      return res.status(400).json({ error: 'Invalid MAC address. Use format: AA:BB:CC:DD:EE:FF' });
+    }
+  }
+
+  if (broadcastAddress) {
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(broadcastAddress)) {
+      return res.status(400).json({ error: 'Invalid broadcast IP address' });
+    }
+  }
+
+  const ok = users.setMacAddress(
+    req.params.userId, req.params.machineId,
+    macAddress || null, broadcastAddress || null
+  );
+  if (!ok) return res.status(404).json({ error: 'Machine not found' });
+  res.json({ ok: true });
+});
 
 // ─── Catch-All: redirect unknown routes to login ─────────
 app.get('*', (req, res) => {

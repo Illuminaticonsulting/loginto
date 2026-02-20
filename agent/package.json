@@ -4,7 +4,8 @@
   "description": "LogInTo Desktop Agent — streams your screen to the dashboard",
   "main": "agent.js",
   "scripts": {
-    "start": "node agent.js"
+    "start": "node agent.js",
+    "install-service": "node install-service.js"
   },
   "dependencies": {
     "dotenv": "^16.4.1",

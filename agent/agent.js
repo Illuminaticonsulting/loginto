@@ -15,6 +15,7 @@
 
 require('dotenv').config();
 const { io } = require('socket.io-client');
+const { spawn } = require('child_process');
 const ScreenCapture = require('./capture');
 const InputHandler = require('./input');
 
@@ -47,6 +48,42 @@ const capture = new ScreenCapture({
 });
 
 const input = new InputHandler();
+
+// ─── Sleep Prevention ────────────────────────────────────
+// Keeps the OS awake while a viewer is actively streaming.
+// macOS: spawns caffeinate   Windows: spawns a PowerShell thread
+let sleepGuard = null;
+
+function startSleepPrevention() {
+  if (sleepGuard) return; // idempotent
+
+  if (process.platform === 'darwin') {
+    sleepGuard = spawn('caffeinate', ['-d', '-i'], { stdio: 'ignore' });
+    sleepGuard.on('exit', () => { sleepGuard = null; });
+    console.log('   Sleep prevention: ON (caffeinate)');
+
+  } else if (process.platform === 'win32') {
+    // SetThreadExecutionState: ES_CONTINUOUS|ES_SYSTEM_REQUIRED|ES_DISPLAY_REQUIRED = 0x80000003
+    const psCmd = [
+      '$sig=\'[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint e);\'',
+      'Add-Type -Name SleepUtil -Namespace Win32 -MemberDefinition $sig',
+      '[Win32.SleepUtil]::SetThreadExecutionState(0x80000003)',
+      'Start-Sleep -Seconds 86400'
+    ].join('; ');
+    sleepGuard = spawn('powershell', [
+      '-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCmd
+    ], { stdio: 'ignore', windowsHide: true });
+    sleepGuard.on('exit', () => { sleepGuard = null; });
+    console.log('   Sleep prevention: ON (SetThreadExecutionState)');
+  }
+}
+
+function stopSleepPrevention() {
+  if (!sleepGuard) return;
+  try { sleepGuard.kill('SIGTERM'); } catch (_) {}
+  sleepGuard = null;
+  console.log('   Sleep prevention: OFF');
+}
 
 // ─── Socket Connection ───────────────────────────────────
 let socket = null;
@@ -90,6 +127,7 @@ function connect() {
 
   socket.on('disconnect', (reason) => {
     console.log('   ⚠️  Disconnected: ' + reason);
+    stopSleepPrevention();
     capture.stopStreaming();
   });
 
@@ -115,6 +153,7 @@ function connect() {
   // ─── Streaming Control ─────────────────────────────────
   socket.on('start-streaming', () => {
     console.log('   📱 Viewer connected — streaming started');
+    startSleepPrevention();
     capture.startStreaming((frameData) => {
       if (socket.connected) {
         // Send frame as binary Buffer — 33% smaller than base64 encoding
@@ -132,6 +171,7 @@ function connect() {
 
   socket.on('stop-streaming', () => {
     console.log('   📱 Viewer disconnected — streaming stopped');
+    stopSleepPrevention();
     capture.stopStreaming();
   });
 
@@ -214,12 +254,14 @@ function connect() {
 // ─── Graceful Shutdown ───────────────────────────────────
 process.on('SIGINT', () => {
   console.log('\n   Shutting down...');
+  stopSleepPrevention();
   capture.stopStreaming();
   if (socket) socket.disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  stopSleepPrevention();
   capture.stopStreaming();
   if (socket) socket.disconnect();
   process.exit(0);
