@@ -173,6 +173,7 @@
                   <p class="text-muted text-sm" style="margin-top:6px;">Run in a terminal <strong>as Administrator</strong> (right-click &gt; Run as administrator). Creates a Task Scheduler entry that starts at every logon.</p>
                 </div>
               </details>
+              <button class="btn-share" data-id="${m.id}" style="margin-top: 12px;">Share &#128279;</button>
             </div>
           `}
         </div>`;
@@ -212,7 +213,7 @@
       });
     });
 
-    // Share buttons (online cards)
+    // Share buttons (all cards — invite link works whether machine is online or offline)
     container.querySelectorAll('.btn-share').forEach(btn => {
       btn.addEventListener('click', () => shareInvite(btn.dataset.id));
     });

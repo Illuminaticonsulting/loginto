@@ -197,12 +197,18 @@ function connect() {
     if (!data || data.displayId == null) return;
     const newInfo = await capture.switchDisplay(data.displayId);
     if (newInfo) {
-      // Sync input handler to the new display's dimensions and global offset
-      input.screenWidth  = capture.screenWidth;
-      input.screenHeight = capture.screenHeight;
+      // Sync input handler to the new display's logical dimensions.
+      // capture.screenWidth is raw pixels (e.g. 2560 on Retina); RobotJS
+      // moveMouse() uses logical points (e.g. 1280).  Multiply by scale
+      // (0.5 on Retina) to convert raw → logical, matching the initial-
+      // connect values that came from robot.getScreenSize().
+      const logicalW = Math.round(capture.screenWidth  * capture.scale);
+      const logicalH = Math.round(capture.screenHeight * capture.scale);
+      input.screenWidth  = logicalW;
+      input.screenHeight = logicalH;
       input.setDisplayOffset(newInfo.offsetX || 0, newInfo.offsetY || 0);
-      newInfo.inputWidth  = capture.screenWidth;
-      newInfo.inputHeight = capture.screenHeight;
+      newInfo.inputWidth  = logicalW;
+      newInfo.inputHeight = logicalH;
       socket.emit('screen-info', newInfo);
       // Also send updated display list (active flag changes)
       socket.emit('displays-list', capture.getDisplays());
