@@ -28,6 +28,17 @@
   let machines = [];  // [{ id, name, agentKey, connected, macAddress, broadcastAddress }]
   const wakePollers = new Map(); // machineId → intervalId (active wake-polling)
 
+  // ─── HTML Entity Escaping ──────────────────────────────
+  // Prevents XSS when injecting user-controlled strings (machine names,
+  // MAC addresses) into innerHTML template literals.
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   // ─── Init UI ───────────────────────────────────────────
   userGreeting.textContent = displayName || userId;
 
@@ -77,7 +88,7 @@
           <div class="machine-card-header">
             <div class="machine-status">
               <span class="dot ${online ? 'online' : 'offline'}"></span>
-              <span class="machine-name" title="${m.name}">${m.name}</span>
+              <span class="machine-name" title="${escHtml(m.name)}">${escHtml(m.name)}</span>
               <span class="machine-status-label">${online ? 'Online' : 'Offline'}</span>
             </div>
             <div class="machine-actions">
@@ -126,7 +137,7 @@
               ${m.macAddress ? `
                 <div class="wol-row">
                   <button class="btn-wake" data-id="${m.id}">&#9889; Wake Machine</button>
-                  <span class="wake-mac-label">${m.macAddress}</span>
+                  <span class="wake-mac-label">${escHtml(m.macAddress)}</span>
                   <button class="btn-set-mac btn-icon text-sm" data-id="${m.id}" title="Change MAC address">&#9998;</button>
                 </div>
                 <p class="wol-hint">Requires UDP port 9 forwarded on your router to the local subnet broadcast (e.g. 192.168.1.255). Enable WoL in BIOS and network adapter settings.</p>
@@ -333,20 +344,24 @@
     }
   });
 
-  // Poll as backup
+  // Poll as backup — only re-render if a machine's status actually changed
+  // (unconditional renderMachines() would destroy DOM every 10s, collapsing
+  // any <details> setup panels the user had open)
   setInterval(() => {
     fetch('/api/machines/' + userId, {
       headers: { 'Authorization': 'Bearer ' + token }
     }).then(res => res.json())
       .then(data => {
         if (data.machines) {
+          let changed = false;
           for (const m of data.machines) {
             const existing = machines.find(x => x.id === m.id);
             if (existing && existing.connected !== m.connected) {
               existing.connected = m.connected;
+              changed = true;
             }
           }
-          renderMachines();
+          if (changed) renderMachines();
         }
       }).catch(() => {});
   }, 10000);

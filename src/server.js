@@ -25,7 +25,6 @@ const wol = require('wol');
 
 // ─── Config ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3456;
-const SESSION_SECRET = process.env.SESSION_SECRET || uuidv4();
 const MAX_LOGIN_ATTEMPTS = parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5;
 const LOCKOUT_MINUTES = parseInt(process.env.LOCKOUT_MINUTES) || 15;
 

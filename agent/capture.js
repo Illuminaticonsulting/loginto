@@ -237,6 +237,14 @@ class ScreenCapture {
   _startInterval(callback) {
     const intervalMs = Math.round(1000 / this.fps);
 
+    // Clear any existing adaptive interval before creating a new one (prevents
+    // leak when setFPS() is called while streaming — each call would add another
+    // concurrent interval without this guard)
+    if (this._adaptiveInterval) {
+      clearInterval(this._adaptiveInterval);
+      this._adaptiveInterval = null;
+    }
+
     // Adaptive quality check every 2 seconds
     this._adaptiveInterval = setInterval(() => this._adaptiveCheck(), 2000);
 
