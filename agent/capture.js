@@ -107,7 +107,8 @@ class ScreenCapture {
       const { execSync } = require('child_process');
 
       if (process.platform === 'darwin') {
-        // Use Python3 + CoreGraphics to get CGDisplayBounds (global desktop coords)
+        // Use Python3 + CoreGraphics to get CGDisplayBounds (global desktop coords).
+        // Print "null" (not "{}") on import failure so we can detect it below.
         const py = [
           'try:',
           ' from Quartz.CoreGraphics import CGGetActiveDisplayList,CGDisplayBounds',
@@ -116,10 +117,23 @@ class ScreenCapture {
           ' r={}',
           ' [r.__setitem__(str(ids[i]),{"x":int(CGDisplayBounds(ids[i]).origin.x),"y":int(CGDisplayBounds(ids[i]).origin.y)}) for i in range(n)]',
           ' print(json.dumps(r))',
-          'except:print("{}")'
+          'except:print("null")'
         ].join('\n');
-        const out = execSync(`python3 -c '${py}'`, { timeout: 5000, encoding: 'utf8' });
-        this._displayOffsets = JSON.parse(out.trim() || '{}');
+        // /usr/bin/python3 is Apple's system Python — always has PyObjC/Quartz
+        // on macOS 11+. Fall back to whatever python3 is in PATH.
+        let out;
+        try {
+          out = execSync(`/usr/bin/python3 -c '${py}'`, { timeout: 5000, encoding: 'utf8' });
+        } catch {
+          out = execSync(`python3 -c '${py}'`, { timeout: 5000, encoding: 'utf8' });
+        }
+        const parsed = JSON.parse(out.trim() || 'null');
+        if (parsed) {
+          this._displayOffsets = parsed;
+        } else {
+          console.warn('⚠️  Display offset detection: Quartz not available. Multi-monitor mouse routing will not work.');
+          console.warn('   Fix: ensure python3 has PyObjC installed (brew install pyobjc-framework-Quartz)');
+        }
 
       } else if (process.platform === 'win32') {
         // Use PowerShell to enumerate monitor bounds in virtual desktop space
@@ -140,6 +154,8 @@ class ScreenCapture {
 
       if (Object.keys(this._displayOffsets).length > 0) {
         console.log('🖥️  Display offsets detected:', JSON.stringify(this._displayOffsets));
+      } else if (this.displays.length > 1) {
+        console.warn('⚠️  Could not determine display offsets — mouse input will map to primary screen on all displays.');
       }
     } catch (e) {
       // Detection failed — all offsets stay at (0,0)
