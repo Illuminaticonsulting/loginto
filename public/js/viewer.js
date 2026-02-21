@@ -1090,9 +1090,15 @@
     displays.forEach((d, i) => {
       const btn = document.createElement('button');
       btn.className = 'display-btn' + (d.active ? ' active' : '');
-      btn.innerHTML =
-        '<span class="display-icon">' + (d.active ? '🟢' : '🖥️') + '</span>' +
-        '<span class="display-name">' + (d.name || ('Display ' + (i + 1))) + '</span>';
+      // Build child spans via DOM API — avoids innerHTML injection of OS-sourced display names
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'display-icon';
+      iconSpan.textContent = d.active ? '🟢' : '🖥️';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'display-name';
+      nameSpan.textContent = d.name || ('Display ' + (i + 1));
+      btn.appendChild(iconSpan);
+      btn.appendChild(nameSpan);
       btn.addEventListener('click', () => {
         if (d.active) { closeAllPanels(); return; }
         // Show switching state

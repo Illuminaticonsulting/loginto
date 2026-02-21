@@ -224,6 +224,7 @@ app.post('/api/machines/:userId', (req, res) => {
   if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
 
   const { name } = req.body;
+  if (name && name.length > 100) return res.status(400).json({ error: 'Name too long (max 100 chars)' });
   const machine = users.addMachine(req.params.userId, name || 'New Machine');
   if (!machine) return res.status(400).json({ error: 'Could not add machine' });
   res.json({ machine });
@@ -250,6 +251,7 @@ app.patch('/api/machines/:userId/:machineId', (req, res) => {
 
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
+  if (name.length > 100) return res.status(400).json({ error: 'Name too long (max 100 chars)' });
   const ok = users.renameMachine(req.params.userId, req.params.machineId, name);
   if (!ok) return res.status(404).json({ error: 'Machine not found' });
   res.json({ ok: true });
