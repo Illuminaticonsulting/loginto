@@ -158,7 +158,7 @@ class UserStore {
     if (!user.machines) user.machines = [];
     const nextNum = user.machines.length + 1;
     const machine = {
-      id: 'm' + Date.now(),
+      id: 'm' + uuidv4().replace(/-/g, '').slice(0, 12),
       name: name || `Machine ${nextNum}`,
       agentKey: uuidv4()
     };

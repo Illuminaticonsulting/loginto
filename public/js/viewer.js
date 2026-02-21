@@ -50,7 +50,6 @@
     mode: localStorage.getItem('loginto_mode') || 'trackpad',
     rightClickMode: false,
     isDragging: false,
-    activeModifiers: new Set(),
 
     // Touch tracking
     touchStartX: 0, touchStartY: 0,
@@ -95,7 +94,6 @@
   const modeBdg  = $('#mode-badge');
   const backdrop = $('#panel-backdrop');
   const toolbar  = $('#toolbar');
-  const keysPanel = null;
   const qualSlider = $('#quality-slider');
   const qualVal   = $('#quality-value');
   const fpsSlider = $('#fps-slider');
@@ -422,11 +420,6 @@
     updateCursor();
   }
 
-  // Legacy: direct apply (used by zoom/pinch where we need instant response)
-  function applyTransform() {
-    scheduleTransform();
-  }
-
   function clampPan(ts) {
     const bw = box.clientWidth, bh = box.clientHeight;
     const vw = canvas.width * ts, vh = canvas.height * ts;
@@ -510,10 +503,6 @@
     cursor.style.display = 'block';
     cursor.classList.toggle('dragging', S.isDragging);
     resetCursorFade();
-  }
-
-  function showCursor() {
-    if (cursor) cursor.style.display = 'block';
   }
 
   function flashCursorClick() {
@@ -899,7 +888,8 @@
   }, { passive: false });
 
   document.addEventListener('keydown', e => {
-    if (e.target === kbInput) return;
+    // Don't intercept when user is typing in any input or textarea (clipboard panel, etc.)
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if ((e.ctrlKey || e.metaKey) && ['r','t','w','l','n'].includes(e.key.toLowerCase())) return;
     e.preventDefault();
     const m = [];

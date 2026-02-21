@@ -32,6 +32,10 @@ const LOCKOUT_MINUTES = parseInt(process.env.LOCKOUT_MINUTES) || 15;
 // ─── App Setup ───────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
+
+// Trust the first proxy (Nginx) so req.ip returns the real client IP.
+// Without this, all clients appear as 127.0.0.1 and share ONE rate-limit bucket.
+app.set('trust proxy', 1);
 const io = new Server(server, {
   cors: { origin: false },
   maxHttpBufferSize: 10e6,
