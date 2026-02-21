@@ -121,6 +121,8 @@ function connect() {
     const screenInfo = capture.getScreenInfo();
     screenInfo.inputWidth = input.screenWidth;
     screenInfo.inputHeight = input.screenHeight;
+    // Initialise input offset to match primary/active display
+    input.setDisplayOffset(screenInfo.offsetX || 0, screenInfo.offsetY || 0);
     console.log(`   📐 Screen: ${screenInfo.width}x${screenInfo.height} capture, ${screenInfo.inputWidth}x${screenInfo.inputHeight} input`);
     socket.emit('screen-info', screenInfo);
   });
@@ -193,8 +195,12 @@ function connect() {
   socket.on('switch-screen', async (data) => {
     const newInfo = await capture.switchDisplay(data.displayId);
     if (newInfo) {
-      newInfo.inputWidth = input.screenWidth;
-      newInfo.inputHeight = input.screenHeight;
+      // Sync input handler to the new display's dimensions and global offset
+      input.screenWidth  = capture.screenWidth;
+      input.screenHeight = capture.screenHeight;
+      input.setDisplayOffset(newInfo.offsetX || 0, newInfo.offsetY || 0);
+      newInfo.inputWidth  = capture.screenWidth;
+      newInfo.inputHeight = capture.screenHeight;
       socket.emit('screen-info', newInfo);
       // Also send updated display list (active flag changes)
       socket.emit('displays-list', capture.getDisplays());

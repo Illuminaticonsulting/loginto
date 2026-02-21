@@ -1625,6 +1625,28 @@ body.fullscreen .action-bar:active {
   transform: none;
 }
 
+.btn-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  margin-left: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-share:hover {
+  background: rgba(99, 102, 241, 0.16);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+.btn-share:active { transform: scale(0.97); }
+
 .btn-set-mac-empty {
   display: inline-block;
   padding: 7px 14px;

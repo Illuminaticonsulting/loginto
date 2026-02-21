@@ -42,6 +42,8 @@ class ScreenCapture {
     // Multi-monitor
     this.displays = [];        // [{ id, name }, ...]
     this.activeDisplayId = null; // null = default/primary
+    this.activeDisplayOffset = { x: 0, y: 0 }; // top-left of active display in global desktop coords
+    this._displayOffsets = {};  // displayId → { x, y }
 
     // Detect screen resolution + displays
     this._detectScreen();
@@ -58,6 +60,12 @@ class ScreenCapture {
           this.displays.forEach((d, i) => {
             console.log(`   ${i + 1}. ${d.name || 'Display ' + (i + 1)} (id: ${d.id})`);
           });
+          // Detect position offsets for each display in global desktop space
+          await this._detectDisplayOffsets();
+          this.activeDisplayOffset = this._displayOffsets[String(this.activeDisplayId)] || { x: 0, y: 0 };
+          if (this.activeDisplayOffset.x || this.activeDisplayOffset.y) {
+            console.log(`🖥️  Primary display offset: (${this.activeDisplayOffset.x}, ${this.activeDisplayOffset.y})`);
+          }
         }
       } catch (e) {
         console.log('   ℹ️  Multi-monitor detection not available');
@@ -88,6 +96,55 @@ class ScreenCapture {
       name: d.name || 'Display ' + (i + 1),
       active: d.id === this.activeDisplayId
     }));
+  }
+
+  // ─── Display offset detection (position in global desktop space) ─────────────
+  async _detectDisplayOffsets() {
+    this._displayOffsets = {};
+    if (this.displays.length <= 1) return; // single display: offset is always (0,0)
+
+    try {
+      const { execSync } = require('child_process');
+
+      if (process.platform === 'darwin') {
+        // Use Python3 + CoreGraphics to get CGDisplayBounds (global desktop coords)
+        const py = [
+          'try:',
+          ' from Quartz.CoreGraphics import CGGetActiveDisplayList,CGDisplayBounds',
+          ' import json',
+          ' e,ids,n=CGGetActiveDisplayList(16,None,None)',
+          ' r={}',
+          ' [r.__setitem__(str(ids[i]),{"x":int(CGDisplayBounds(ids[i]).origin.x),"y":int(CGDisplayBounds(ids[i]).origin.y)}) for i in range(n)]',
+          ' print(json.dumps(r))',
+          'except:print("{}")'
+        ].join('\n');
+        const out = execSync(`python3 -c '${py}'`, { timeout: 5000, encoding: 'utf8' });
+        this._displayOffsets = JSON.parse(out.trim() || '{}');
+
+      } else if (process.platform === 'win32') {
+        // Use PowerShell to enumerate monitor bounds in virtual desktop space
+        const out = execSync(
+          'powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; ' +
+          '[System.Windows.Forms.Screen]::AllScreens | foreach { $b=$_.Bounds; Write-Output \\"$($b.X),$($b.Y)\\" }"',
+          { timeout: 5000, encoding: 'utf8', windowsHide: true }
+        );
+        const lines = out.trim().split('\n').map(l => l.trim()).filter(Boolean);
+        // Match by index — screenshot-desktop and Screen.AllScreens both use EnumDisplayMonitors order
+        this.displays.forEach((d, i) => {
+          if (lines[i]) {
+            const parts = lines[i].split(',');
+            this._displayOffsets[String(d.id)] = { x: parseInt(parts[0]) || 0, y: parseInt(parts[1]) || 0 };
+          }
+        });
+      }
+
+      if (Object.keys(this._displayOffsets).length > 0) {
+        console.log('🖥️  Display offsets detected:', JSON.stringify(this._displayOffsets));
+      }
+    } catch (e) {
+      // Detection failed — all offsets stay at (0,0)
+      console.log('   ℹ️  Display offset detection failed — using (0,0) offsets');
+    }
   }
 
   async switchDisplay(displayId) {
@@ -124,6 +181,10 @@ class ScreenCapture {
     // Resume streaming if it was running
     if (wasStreaming && cb) this.startStreaming(cb);
 
+    // Update active display offset
+    this.activeDisplayOffset = this._displayOffsets[String(this.activeDisplayId)] || { x: 0, y: 0 };
+    console.log(`🖥️  Display ${this.activeDisplayId} offset: (${this.activeDisplayOffset.x}, ${this.activeDisplayOffset.y})`);
+
     return this.getScreenInfo();
   }
 
@@ -139,7 +200,9 @@ class ScreenCapture {
       fps: this.fps,
       scale: this.scale,
       displayId: this.activeDisplayId,
-      displayCount: this.displays.length
+      displayCount: this.displays.length,
+      offsetX: this.activeDisplayOffset?.x || 0,
+      offsetY: this.activeDisplayOffset?.y || 0
     };
   }
 

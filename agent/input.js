@@ -140,6 +140,8 @@ class InputHandler {
     this.screenWidth = 1920;
     this.screenHeight = 1080;
     this._winPs = null;   // persistent PowerShell worker (Windows only)
+    this._offsetX = 0;    // global desktop offset of active display (for multi-monitor)
+    this._offsetY = 0;
 
     this._init();
   }
@@ -257,53 +259,66 @@ class InputHandler {
     } catch (e) { /* ignore */ }
   }
 
+  /** Update the global desktop offset for the currently active display (multi-monitor). */
+  setDisplayOffset(x, y) {
+    this._offsetX = x || 0;
+    this._offsetY = y || 0;
+  }
+
   // ─── Public input methods ────────────────────────────────────────────────────
 
   /**
    * Scale coordinates from the client viewport to actual screen coordinates
+   * and apply the active display's global desktop offset (multi-monitor support).
    */
   _scaleCoords(x, y, sourceWidth, sourceHeight) {
-    const scaledX = Math.round((x / sourceWidth) * this.screenWidth);
-    const scaledY = Math.round((y / sourceHeight) * this.screenHeight);
+    const scaledX = Math.round((x / sourceWidth) * this.screenWidth) + this._offsetX;
+    const scaledY = Math.round((y / sourceHeight) * this.screenHeight) + this._offsetY;
     return {
-      x: Math.max(0, Math.min(this.screenWidth - 1, scaledX)),
-      y: Math.max(0, Math.min(this.screenHeight - 1, scaledY))
+      x: Math.max(0, Math.min(65535, scaledX)),
+      y: Math.max(0, Math.min(65535, scaledY))
     };
   }
 
   moveMouse(x, y) {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
-      try { this.robot.moveMouse(Math.round(x), Math.round(y)); } catch (e) { /* ignore */ }
+      try { this.robot.moveMouse(gx, gy); } catch (e) { /* ignore */ }
     } else if (this.platform === 'win32') {
-      this._winSend(`MOVE|${Math.round(x)}|${Math.round(y)}`);
+      this._winSend(`MOVE|${gx}|${gy}`);
     } else {
-      this._fallbackMoveMouse(x, y);
+      this._fallbackMoveMouse(gx, gy);
     }
   }
 
   click(x, y, button = 'left') {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
       try {
-        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.moveMouse(gx, gy);
         this.robot.mouseClick(button);
       } catch (e) { /* ignore */ }
     } else if (this.platform === 'win32') {
-      this._winSend(`CLICK|${Math.round(x)}|${Math.round(y)}|${button}`);
+      this._winSend(`CLICK|${gx}|${gy}|${button}`);
     } else {
-      this._fallbackClick(x, y, button);
+      this._fallbackClick(gx, gy, button);
     }
   }
 
   doubleClick(x, y) {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
       try {
-        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.moveMouse(gx, gy);
         this.robot.mouseClick('left', true);
       } catch (e) { /* ignore */ }
     } else if (this.platform === 'win32') {
-      this._winSend(`DCLICK|${Math.round(x)}|${Math.round(y)}`);
+      this._winSend(`DCLICK|${gx}|${gy}`);
     } else {
-      this._fallbackDoubleClick(x, y);
+      this._fallbackDoubleClick(gx, gy);
     }
   }
 
@@ -312,9 +327,11 @@ class InputHandler {
   }
 
   scroll(x, y, deltaX, deltaY) {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
       try {
-        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.moveMouse(gx, gy);
         if (deltaY !== 0) this.robot.scrollMouse(0, deltaY > 0 ? -3 : 3);
         if (deltaX !== 0) this.robot.scrollMouse(deltaX > 0 ? -3 : 3, 0);
       } catch (e) { /* ignore */ }
@@ -322,34 +339,38 @@ class InputHandler {
       // Positive sy = WHEEL_DELTA positive = scroll up; negate deltaY (browser positive = down)
       const sy = deltaY !== 0 ? (deltaY > 0 ? -3 : 3) : 0;
       const sx = deltaX !== 0 ? (deltaX > 0 ? -3 : 3) : 0;
-      this._winSend(`SCROLL|${Math.round(x)}|${Math.round(y)}|${sy}|${sx}`);
+      this._winSend(`SCROLL|${gx}|${gy}|${sy}|${sx}`);
     }
     // Linux: no scroll fallback (xdotool scroll not reliable without click)
   }
 
   mouseDown(x, y, button = 'left') {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
       try {
-        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.moveMouse(gx, gy);
         this.robot.mouseToggle('down', button);
       } catch (e) { /* ignore */ }
     } else if (this.platform === 'win32') {
-      this._winSend(`DOWN|${Math.round(x)}|${Math.round(y)}|${button}`);
+      this._winSend(`DOWN|${gx}|${gy}|${button}`);
     } else {
-      this._fallbackMouseDown(x, y, button);
+      this._fallbackMouseDown(gx, gy, button);
     }
   }
 
   mouseUp(x, y, button = 'left') {
+    const gx = Math.round(x) + this._offsetX;
+    const gy = Math.round(y) + this._offsetY;
     if (this.useRobot) {
       try {
-        this.robot.moveMouse(Math.round(x), Math.round(y));
+        this.robot.moveMouse(gx, gy);
         this.robot.mouseToggle('up', button);
       } catch (e) { /* ignore */ }
     } else if (this.platform === 'win32') {
-      this._winSend(`UP|${Math.round(x)}|${Math.round(y)}|${button}`);
+      this._winSend(`UP|${gx}|${gy}|${button}`);
     } else {
-      this._fallbackMouseUp(x, y, button);
+      this._fallbackMouseUp(gx, gy, button);
     }
   }
 

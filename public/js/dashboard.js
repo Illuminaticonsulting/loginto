@@ -89,6 +89,7 @@
           ${online ? `
             <div class="machine-body">
               <a href="/viewer.html?machine=${m.id}" class="btn-primary btn-connect">Connect</a>
+              <button class="btn-share" data-id="${m.id}">Share &#128279;</button>
               <details class="advanced-toggle" style="margin-top: 16px;">
                 <summary class="text-muted text-sm">Setup command</summary>
                 <div class="setup-tabs-mini">
@@ -198,6 +199,11 @@
           }).catch(() => {});
         }
       });
+    });
+
+    // Share buttons (online cards)
+    container.querySelectorAll('.btn-share').forEach(btn => {
+      btn.addEventListener('click', () => shareInvite(btn.dataset.id));
     });
 
     // Rename buttons
@@ -485,6 +491,32 @@
         }
       })
       .catch(() => alert('Network error saving MAC address.'));
+  }
+
+  // ─── Invite / Share ────────────────────────────────────
+
+  function shareInvite(machineId) {
+    const m = machines.find(x => x.id === machineId);
+    if (!m) return;
+
+    fetch(`/api/invites/${userId}/${machineId}`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.inviteUrl) { alert('Error: ' + (data.error || 'Could not create invite.')); return; }
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(data.inviteUrl).then(() => {
+            alert('Invite link copied!\n\n' + data.inviteUrl + '\n\nAnyone with this link can view and control your machine for 7 days.');
+          }).catch(() => {
+            prompt('Share this invite link (valid 7 days):', data.inviteUrl);
+          });
+        } else {
+          prompt('Share this invite link (valid 7 days):', data.inviteUrl);
+        }
+      })
+      .catch(() => alert('Network error creating invite link.'));
   }
 
   // ─── Initial Load ─────────────────────────────────────

@@ -14,11 +14,14 @@
 
   const token = localStorage.getItem('loginto_token');
   const userId = localStorage.getItem('loginto_userId');
-  if (!token || !userId) { window.location.href = '/'; return; }
 
-  // Get machineId from URL params (e.g., /viewer.html?machine=m1)
+  // Get machineId / invite token from URL params
   const urlParams = new URLSearchParams(window.location.search);
-  const machineId = urlParams.get('machine') || null;
+  const machineId   = urlParams.get('machine') || null;
+  const inviteToken = urlParams.get('invite')  || null;
+
+  // Invite links bypass login — owners must be logged in
+  if (!inviteToken && (!token || !userId)) { window.location.href = '/'; return; }
 
   // ─── Constants ──────────────────────────────────────────
   const TRACKPAD_SPEED = 1.8;
@@ -149,9 +152,22 @@
   fpsSlider.value = S.currentFPSSetting;
   fpsVal.textContent = S.currentFPSSetting;
 
-  fetch('/api/session', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => { if (!r.ok) { localStorage.clear(); window.location.href = '/'; } else initSocket(); })
-    .catch(() => initSocket());
+  if (inviteToken) {
+    // Validate invite and show host info, then connect
+    fetch('/api/invite-info/' + inviteToken)
+      .then(r => r.json())
+      .then(info => {
+        if (info.error) { alert('This invite link is invalid or has expired.'); window.location.href = '/'; return; }
+        if (statText) statText.textContent = info.displayName + '\u2019s ' + info.machineName;
+        document.title = 'Viewing ' + info.displayName + '\u2019s ' + info.machineName + ' — LogInTo';
+        initSocket();
+      })
+      .catch(() => initSocket());
+  } else {
+    fetch('/api/session', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => { if (!r.ok) { localStorage.clear(); window.location.href = '/'; } else initSocket(); })
+      .catch(() => initSocket());
+  }
 
   // Recompute fit on resize
   window.addEventListener('resize', () => { if (S.screenInfo) computeFit(); markBoxRectDirty(); });
@@ -161,8 +177,12 @@
   // ───────────────────────────────────────────────────────
 
   function initSocket() {
+    const authPayload = inviteToken
+      ? { inviteToken, role: 'viewer' }
+      : { token, role: 'viewer', machineId };
+
     S.socket = io({
-      auth: { token, role: 'viewer', machineId },
+      auth: authPayload,
       reconnection: true, reconnectionDelay: 1000,
       reconnectionDelayMax: 5000, reconnectionAttempts: Infinity,
       transports: ['websocket', 'polling'],
@@ -178,6 +198,7 @@
     });
     S.socket.on('connect_error', err => {
       if (err.message === 'Authentication required') { localStorage.clear(); window.location.href = '/'; }
+      if (err.message === 'Invalid or expired invite link') { alert('This invite link is invalid or has expired.'); window.location.href = '/'; }
     });
     S.socket.on('kicked', () => { alert('Another device connected.'); window.location.href = '/dashboard.html'; });
 

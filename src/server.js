@@ -79,6 +79,7 @@ const wakeLimiter = rateLimit({
 // ─── State ───────────────────────────────────────────────
 const sessions = new Map();  // token → { userId, created, lastActive }
 const agents = new Map();    // agentKey → { socket, screenInfo, connected, userId, machineId, machineName }
+const invites = new Map();   // inviteToken → { userId, machineId, machineName, displayName, expiresAt }
 // Viewers now tracked via Socket.IO rooms: `viewers:${userId}`
 // No Map needed — rooms handle multi-viewer broadcast efficiently
 
@@ -546,6 +547,68 @@ app.patch('/api/machines/:userId/:machineId/mac', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Invite Links ────────────────────────────────────────
+
+const INVITE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Create invite link for a machine
+app.post('/api/invites/:userId/:machineId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const machine = users.getMachine(req.params.userId, req.params.machineId);
+  if (!machine) return res.status(404).json({ error: 'Machine not found' });
+
+  const user = users.getById(req.params.userId);
+  const inviteToken = uuidv4();
+  const expiresAt   = Date.now() + INVITE_TTL;
+
+  invites.set(inviteToken, {
+    userId:      req.params.userId,
+    machineId:   req.params.machineId,
+    machineName: machine.name,
+    displayName: user?.displayName || req.params.userId,
+    expiresAt
+  });
+
+  const host = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    inviteToken,
+    inviteUrl: `${host}/viewer.html?invite=${inviteToken}`,
+    expiresAt
+  });
+});
+
+// Public invite info (no auth — viewer page uses this to show whose machine it is)
+app.get('/api/invite-info/:inviteToken', (req, res) => {
+  const inv = invites.get(req.params.inviteToken);
+  if (!inv || Date.now() > inv.expiresAt) {
+    return res.status(404).json({ error: 'Invalid or expired invite link' });
+  }
+  res.json({
+    userId:      inv.userId,
+    displayName: inv.displayName,
+    machineName: inv.machineName,
+    expiresAt:   inv.expiresAt
+  });
+});
+
+// Revoke an invite
+app.delete('/api/invites/:userId/:inviteToken', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!isValidSession(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const session = getSession(token);
+  if (session.userId !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const inv = invites.get(req.params.inviteToken);
+  if (!inv || inv.userId !== req.params.userId) return res.status(404).json({ error: 'Invite not found' });
+
+  invites.delete(req.params.inviteToken);
+  res.json({ ok: true });
+});
+
 // ─── Catch-All: redirect unknown routes to login ─────────
 app.get('*', (req, res) => {
   res.redirect('/');
@@ -553,7 +616,7 @@ app.get('*', (req, res) => {
 
 // ─── Socket.IO Auth Middleware ───────────────────────────
 io.use((socket, next) => {
-  const { token, role, agentKey } = socket.handshake.auth;
+  const { token, role, agentKey, inviteToken } = socket.handshake.auth;
 
   if (role === 'agent') {
     if (!agentKey) return next(new Error('Agent key required'));
@@ -565,6 +628,14 @@ io.use((socket, next) => {
     socket.machineId = user.machineId;
     socket.machineName = user.machineName;
     socket.role = 'agent';
+    next();
+  } else if (inviteToken) {
+    const inv = invites.get(inviteToken);
+    if (!inv || Date.now() > inv.expiresAt) return next(new Error('Invalid or expired invite link'));
+    socket.userId = inv.userId;
+    socket.role = 'viewer';
+    socket.machineId = inv.machineId;
+    socket.isInvited = true;
     next();
   } else {
     if (!isValidSession(token)) return next(new Error('Authentication required'));
