@@ -107,15 +107,19 @@ class ScreenCapture {
       const { execSync } = require('child_process');
 
       if (process.platform === 'darwin') {
-        // Use Python3 + CoreGraphics to get CGDisplayBounds (global desktop coords).
-        // Print "null" (not "{}") on import failure so we can detect it below.
+        // screenshot-desktop assigns displays 0-based index IDs with the primary
+        // display first (movePrimaryToHead).  We must key offsets the same way —
+        // NOT by CGDirectDisplayID (hardware ID), which is completely different.
+        // Sort CoreGraphics list: main display first, then others, matching
+        // screenshot-desktop's movePrimaryToHead() + addId() ordering.
         const py = [
           'try:',
-          ' from Quartz.CoreGraphics import CGGetActiveDisplayList,CGDisplayBounds',
+          ' from Quartz.CoreGraphics import CGGetActiveDisplayList,CGDisplayBounds,CGMainDisplayID',
           ' import json',
           ' e,ids,n=CGGetActiveDisplayList(16,None,None)',
-          ' r={}',
-          ' [r.__setitem__(str(ids[i]),{"x":int(CGDisplayBounds(ids[i]).origin.x),"y":int(CGDisplayBounds(ids[i]).origin.y)}) for i in range(n)]',
+          ' mid=CGMainDisplayID()',
+          ' sids=sorted(list(ids[:n]),key=lambda d:(0 if d==mid else 1))',
+          ' r={str(i):{"x":int(CGDisplayBounds(sids[i]).origin.x),"y":int(CGDisplayBounds(sids[i]).origin.y)} for i in range(len(sids))}',
           ' print(json.dumps(r))',
           'except:print("null")'
         ].join('\n');
