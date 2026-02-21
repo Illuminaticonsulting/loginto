@@ -83,6 +83,14 @@ const invites = new Map();   // inviteToken → { userId, machineId, machineName
 // Viewers now tracked via Socket.IO rooms: `viewers:${userId}`
 // No Map needed — rooms handle multi-viewer broadcast efficiently
 
+// ─── Invite Cleanup (every hour, expire after TTL) ────
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, inv] of invites) {
+    if (now > inv.expiresAt) invites.delete(token);
+  }
+}, 60 * 60 * 1000);
+
 // ─── Session Cleanup (every 10 min, expire after 24h) ────
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 setInterval(() => {
@@ -573,7 +581,8 @@ app.post('/api/invites/:userId/:machineId', (req, res) => {
     expiresAt
   });
 
-  const host = `${req.protocol}://${req.get('host')}`;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = `${proto}://${req.get('host')}`;
   res.json({
     inviteToken,
     inviteUrl: `${host}/viewer.html?invite=${inviteToken}`,
@@ -796,12 +805,14 @@ io.on('connection', (socket) => {
       if (a?.connected) a.socket.emit('list-screens');
     });
     socket.on('switch-screen', (data) => {
+      if (!data || data.displayId == null) return;
       const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('switch-screen', data);
     });
 
     // Clipboard sync
     socket.on('clipboard-write', (data) => {
+      if (!data || typeof data.text !== 'string' || data.text.length > 50000) return;
       const a = socket.agentKey ? agents.get(socket.agentKey) : null;
       if (a?.connected) a.socket.emit('clipboard-write', data);
     });

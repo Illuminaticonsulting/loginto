@@ -149,6 +149,7 @@ function connect() {
 
   socket.on('kicked', (data) => {
     console.log('   ⚠️  Kicked: ' + (data.reason || 'Another agent connected'));
+    stopSleepPrevention();
     capture.stopStreaming();
   });
 
@@ -193,6 +194,7 @@ function connect() {
   });
 
   socket.on('switch-screen', async (data) => {
+    if (!data || data.displayId == null) return;
     const newInfo = await capture.switchDisplay(data.displayId);
     if (newInfo) {
       // Sync input handler to the new display's dimensions and global offset

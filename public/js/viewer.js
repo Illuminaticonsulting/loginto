@@ -76,6 +76,7 @@
   };
 
   let keyboardOpen = false;
+  let inviteLabel = ''; // host info shown in status bar during invite sessions
 
   // ─── DOM ────────────────────────────────────────────────
   const $ = sel => document.querySelector(sel);
@@ -158,7 +159,8 @@
       .then(r => r.json())
       .then(info => {
         if (info.error) { alert('This invite link is invalid or has expired.'); window.location.href = '/'; return; }
-        if (statText) statText.textContent = info.displayName + '\u2019s ' + info.machineName;
+        inviteLabel = info.displayName + '\u2019s ' + info.machineName;
+        if (statText) statText.textContent = inviteLabel;
         document.title = 'Viewing ' + info.displayName + '\u2019s ' + info.machineName + ' — LogInTo';
         initSocket();
       })
@@ -266,7 +268,8 @@
   }
 
   function setStatus(t, err) {
-    statText.textContent = t;
+    // In invite mode, preserve the host name when the connection is good
+    statText.textContent = (!err && inviteLabel) ? inviteLabel : t;
     statDot.classList.toggle('error', err);
   }
 
@@ -1155,19 +1158,7 @@
     if (document.visibilityState === 'visible' && S.connected) requestWakeLock();
   });
 
-  // Initial request after first frame
-  const origOnFrame = onFrame;
-  let wakeLockRequested = false;
-  // Patch onFrame to request wake lock once
-  const _origDecodeAndRender = decodeAndRender;
-
-  // Request wake lock when we first connect
-  const _origSetStatus = setStatus;
-  function setStatusWithWake(t, err) {
-    _origSetStatus(t, err);
-    if (!err && !wakeLockRequested) { wakeLockRequested = true; requestWakeLock(); }
-  }
-  // Can't easily override — just request on first frame arrival
+  // Request wake lock on first connect
   if (S.connected) requestWakeLock();
   // Also request after socket connects
   setTimeout(() => { if (S.connected) requestWakeLock(); }, 2000);
